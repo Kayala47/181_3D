@@ -1,6 +1,0 @@
-cargo:rerun-if-env-changed=RUSSIMP_PREBUILT
-Downloading https://github.com/EYHN/russimp-sys/releases/download/v1.0.1/russimp-1.0.1-x86_64-apple-darwin.tar.gz
-cargo:rustc-link-search=native=/Users/summerhasama/Desktop/181_3D/scene3d/target/debug/build/russimp-sys-837324ad0ace61ae/out/unpack/lib
-cargo:rustc-link-lib=static=assimp
-cargo:rustc-link-lib=static=zlibstatic
-cargo:rustc-link-lib=c++
