@@ -1,0 +1,5 @@
+cargo:warning=shaderc: searching for native shaderc libraries on system;  use '--features build-from-source' to force building from source code
+cargo:warning=shaderc: macOS static build is experimental
+cargo:rustc-link-search=native=/usr/local/lib
+cargo:rustc-link-lib=dylib=shaderc_shared
+cargo:rustc-link-lib=dylib=c++
