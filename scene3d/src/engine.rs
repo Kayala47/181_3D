@@ -62,6 +62,15 @@ impl Engine {
     pub fn set_camera(&mut self, cam:Camera) {
         self.camera = cam;
     }
+
+    pub fn get_camera(&mut self) -> &mut Camera {
+        &mut self.camera
+    }
+
+    pub fn get_input(&mut self) -> &Input {
+        &self.input
+    }
+
     pub fn create_game_object(&mut self, model:Option<&Model>, trf:Isometry3) -> &mut GameObject {
         self.objects.push(GameObject{model:model.cloned(), transform:trf});
         self.objects.last_mut().unwrap()

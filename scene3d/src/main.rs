@@ -33,7 +33,25 @@ fn main() -> Result<()> {
 
     engine.play(|engine| {
         for obj in engine.objects_mut() {
-            obj.move_by(Vec3::new(1.0, 1.0, 0.0) * DT);
+            //obj.move_by(Vec3::new(0, -1.0, 0.0) * DT);      
         }
+        
+        let input = engine.get_input();
+        let mut move_cam = Vec3::new(0.0, 0.0, 0.0);
+        if input.is_key_down(winit::event::VirtualKeyCode::Down) {
+            move_cam.z -= 1.0;
+        }
+        else if input.is_key_down(winit::event::VirtualKeyCode::Left) {
+            move_cam.x += 1.0;
+        }
+        else if input.is_key_down(winit::event::VirtualKeyCode::Right) {
+            move_cam.x -= 1.0;
+        }
+        else if input.is_key_down(winit::event::VirtualKeyCode::Up) {
+            move_cam.z += 1.0;
+        }
+
+        engine.get_camera().move_eye(move_cam);
+        engine.get_camera().move_at(move_cam);
     })
 }
