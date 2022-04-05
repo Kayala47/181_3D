@@ -26,32 +26,33 @@ fn main() -> Result<()> {
     engine.create_game_object(
         Some(&model),
         Isometry3::new(
-            Vec3::new(0.0, -12.5, 25.0),
+            Vec3::new(0.0, -30., 25.0),
             Rotor3::identity()
         ),
     );
 
     engine.play(|engine| {
-        for obj in engine.objects_mut() {
-            //obj.move_by(Vec3::new(0, -1.0, 0.0) * DT);      
-        }
         
         let input = engine.get_input();
-        let mut move_cam = Vec3::new(0.0, 0.0, 0.0);
+
+        let mut move_by = Vec3::new(0.0, 0.0, 0.0);
         if input.is_key_down(winit::event::VirtualKeyCode::Down) {
-            move_cam.z -= 1.0;
+            move_by.z -= 1.0;
         }
         else if input.is_key_down(winit::event::VirtualKeyCode::Left) {
-            move_cam.x += 1.0;
+            move_by.x += 1.0;
         }
         else if input.is_key_down(winit::event::VirtualKeyCode::Right) {
-            move_cam.x -= 1.0;
+            move_by.x -= 1.0;
         }
         else if input.is_key_down(winit::event::VirtualKeyCode::Up) {
-            move_cam.z += 1.0;
+            move_by.z += 1.0;
         }
 
-        engine.get_camera().move_eye(move_cam);
-        engine.get_camera().move_at(move_cam);
+        engine.get_camera().move_eye(move_by);
+        engine.get_camera().move_at(move_by);
+        
+        let obj = engine.objects_mut().next().unwrap();
+        obj.move_by(move_by);
     })
 }
