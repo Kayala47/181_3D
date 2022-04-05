@@ -217,7 +217,7 @@ impl Engine {
 pub struct Room {
     id: usize,
     gameobject: GameObject,
-    objects: Vec<GameObject>,
+    objects: Vec<Key>,
     doors: [bool; 4], //N, E, S, W yes/no for doors
     connected_rooms: [usize; 4], //point by ID
 
@@ -227,6 +227,7 @@ impl Room {
     pub fn move_by(&mut self, vec:Vec3) {
         self.gameobject.move_by(vec);
     }
+
 }
 
 pub struct Key {
@@ -241,9 +242,9 @@ impl Key {
         self.gameobject.move_by(vec);
     }
 
-    pub fn pick_up(&mut self, game_state: &mut GameState){
+    pub fn pick_up(mut self, game_state: &mut GameState){
         self.picked_up = true;
-        game_state.keys_grabbed.push(&*self);
+        game_state.keys_grabbed.push(self);
         //TODO: make it disappear   en
     }
 }
