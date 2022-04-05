@@ -158,7 +158,7 @@ use vulkano::pipeline::graphics::depth_stencil::*;
                 [
                     vulkano::descriptor_set::WriteDescriptorSet::image_view_sampler(0,
                                                                                     vulkano::image::view::ImageView::new_default(texture.texture.clone()).unwrap(),
-                                                                                    sampler.clone())]
+                                                                                    sampler)]
             ).unwrap(),
         }
     }
