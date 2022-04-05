@@ -240,7 +240,7 @@ impl Room {
 }
 
 pub struct Key {
-    roomid: usize, //the room they open to
+    roomid: usize, //the room they open  
     gameobject: GameObject,
     picked_up: bool,
 
@@ -254,7 +254,6 @@ impl Key {
     pub fn pick_up(mut self, game_state: &mut GameState){
         self.picked_up = true;
         game_state.keys_grabbed.push(self);
-        //TODO: make it disappear   en
     }
 }
 
