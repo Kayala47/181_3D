@@ -9,6 +9,9 @@ use crate::types::*;
 use crate::input::Input;
 use crate::renderer::textured::TexturedMeshRenderer;
 use std::collections::HashMap;
+
+const GRAB_THRESHOLD: f32 = 10.0;
+
 pub struct WindowSettings {
     pub w: usize,
     pub h: usize,
@@ -251,9 +254,9 @@ impl Key {
         self.gameobject.move_by(vec);
     }
 
-    pub fn pick_up(mut self, game_state: &mut GameState){
+    pub fn pick_up(mut self, player: &mut Player){
         self.picked_up = true;
-        game_state.keys_grabbed.push(self);
+        player.keys_grabbed.push(self);
     }
 }
 
@@ -263,14 +266,41 @@ pub struct World {
     end_room: Room,
 }
 
-pub struct GameState{
+pub struct Player{
+    object: GameObject,
     keys_grabbed: Vec<Key>,
+    current_room: usize, //id of room
+    world: World, //so the player knows about the rooms
+}
+
+impl Player {
+
+    pub fn grab(&mut self, world: &mut World){
+        //checks if keys are nearby and grabs them
+
+        let curr_pos = self.object.transform.translation;
+
+        for key in world.rooms_list.get(&self.current_room).unwrap().objects.iter(){
+
+            let key_pos = key.gameobject.transform.translation;
+
+            if (curr_pos - key_pos).mag() < GRAB_THRESHOLD{
+                (&key).pick_up(self);
+            }
+        }
+    }
+}
+
+
+pub struct GameState{
+    player: Player,
+    
 }
 
 
 pub struct GameObject {
     model:Option<Model>,
-    transform:Isometry3,
+    transform:Isometry3, //has a translation and rotation
 }
 impl GameObject {
     pub fn move_by(&mut self, vec:Vec3) {
