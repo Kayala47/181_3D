@@ -10,7 +10,10 @@ use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 
+// TODO: figure out actual sizes
 const GRAB_THRESHOLD: f32 = 10.0;
+const ROOM_RADIUS: f32 = 50.0; //not the right word, but half the length.
+const DOOR_THRESHOLD: f32 = 5.0; // if within this distance of a door, need to have a key
 
 pub struct WindowSettings {
     pub w: usize,
