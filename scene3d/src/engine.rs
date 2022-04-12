@@ -35,11 +35,12 @@ pub struct Engine {
     objects:Vec<GameObject>,
     vulkan:Vulkan,
     input:Input,
-    tex_mesh_renderer:TexturedMeshRenderer
+    tex_mesh_renderer:TexturedMeshRenderer,
+    world: World,
 }
 
 impl Engine {
-    pub fn new(ws:WindowSettings) -> Self {
+    pub fn new(ws:WindowSettings, world: World) -> Self {
         let event_loop = EventLoop::new();
         let wb = WindowBuilder::new()
             .with_inner_size(winit::dpi::LogicalSize::new(ws.w as f32, ws.h as f32))
@@ -56,7 +57,8 @@ impl Engine {
             next_texture:0,
             next_mesh:0,
             textures:HashMap::new(),
-            meshes:HashMap::new()
+            meshes:HashMap::new(),
+            world
         }
     }
     pub fn set_camera(&mut self, cam:Camera) {
@@ -75,6 +77,11 @@ impl Engine {
         self.objects.push(GameObject{model:model.cloned(), transform:trf});
         self.objects.last_mut().unwrap()
     }
+
+    pub fn get_world(&mut self) -> &mut World {
+        &mut self.world
+    }
+
     pub fn objects_mut(&mut self) -> impl Iterator<Item=&mut GameObject> {
         self.objects.iter_mut()
     }
@@ -203,6 +210,27 @@ impl Engine {
                 self.tex_mesh_renderer.push_model(model, mesh, tex, obj.transform);
             }
         }
+
+        let hm =  self.world.get_rooms_list();
+        for (_, room) in hm.iter() {
+            let obj = room.get_gameobject();
+            if let Some(model) = obj.model {
+                let mesh = &self.meshes[&model.mesh];
+                let tex = &self.textures[&model.texture];
+                self.tex_mesh_renderer.push_model(model, mesh, tex, obj.transform);
+            }
+
+            for key in room.get_keys().iter() {
+                let obj = key.get_gameobject();
+                if let Some(model) = obj.model {
+                    let mesh = &self.meshes[&model.mesh];
+                    let tex = &self.textures[&model.texture];
+                    self.tex_mesh_renderer.push_model(model, mesh, tex, obj.transform);
+                }
+
+            }
+        }
+
         self.tex_mesh_renderer.prepare_draw(&self.camera);
 
         builder
@@ -227,14 +255,24 @@ pub struct Room {
     id: usize,
     gameobject: GameObject,
     objects: Vec<Key>,
-    doors: [bool; 4], //N, E, S, W yes/no for doors
-    connected_rooms: [usize; 4], //point by ID
-
+    connected_rooms: [usize; 4], //point by ID and N,E,S,W, -1 for no room
 }
 
 impl Room {
     pub fn move_by(&mut self, vec:Vec3) {
         self.gameobject.move_by(vec);
+    }
+
+    pub fn get_gameobject(&self) -> & GameObject {
+        & self.gameobject
+    }
+
+    pub fn get_mut_gameobject(&mut self) -> &mut GameObject {
+        &mut self.gameobject
+    }
+
+    pub fn get_keys(& self) -> & Vec<Key> {
+        & self.objects
     }
 
 }
@@ -247,8 +285,18 @@ pub struct Key {
 }
 
 impl Key {
-    pub fn move_by(&mut self, vec:Vec3) {
-        self.gameobject.move_by(vec);
+
+    pub fn get_gameobject(& self) -> & GameObject {
+       & self.gameobject
+    }
+
+    pub fn new_key(roomid: usize, model:Option<&Model>, trf:Isometry3) -> Self {
+        let game_obj = GameObject {model:model.cloned(), transform:trf};
+        Self {
+            roomid,
+            gameobject: game_obj,
+            picked_up: false
+        } 
     }
 
     pub fn pick_up(mut self, game_state: &mut GameState){
@@ -256,18 +304,43 @@ impl Key {
         game_state.keys_grabbed.push(self);
         //TODO: make it disappear   en
     }
+
 }
 
 pub struct World {
-    start_room: Room,
+    start_room_id: usize,
     rooms_list: HashMap<usize, Room>,
-    end_room: Room,
+    end_room_id: usize,
 }
 
+impl World {
+
+    pub fn new(start_room_id: usize, end_room_id: usize ) -> Self {
+        Self {
+            start_room_id,
+            rooms_list: HashMap::new(),
+            end_room_id
+        }
+    }
+    pub fn add_room(&mut self, id: usize, objects: Vec<Key>, connected_rooms: [usize;4], model:Option<&Model>, trf:Isometry3) {
+        let game_obj = GameObject {model:model.cloned(), transform:trf};
+        self.rooms_list.insert(id,Room {
+            id: id,
+            gameobject: game_obj,
+            objects: objects,
+            connected_rooms: connected_rooms,
+        } );
+        
+    }
+
+    pub fn get_rooms_list(&mut self) -> &HashMap<usize, Room>  {
+        &self.rooms_list
+    }
+
+}
 pub struct GameState{
     keys_grabbed: Vec<Key>,
 }
-
 
 pub struct GameObject {
     model:Option<Model>,
@@ -277,6 +350,7 @@ impl GameObject {
     pub fn move_by(&mut self, vec:Vec3) {
         self.transform.append_translation(vec);
     }
+
 }
 use std::sync::Arc;
 use vulkano::buffer::ImmutableBuffer;
