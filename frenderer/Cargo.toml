@@ -1,5 +1,5 @@
 [workspace]
-members = ["anim3d", "maze_game3d", "frenderer"]
+members = ["anim3d", "frenderer"]
 exclude = ["target", "content"]
 
 [profile.dev.package.backtrace]
