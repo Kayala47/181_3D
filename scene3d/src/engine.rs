@@ -15,6 +15,14 @@ const GRAB_THRESHOLD: f32 = 10.0;
 const ROOM_RADIUS: f32 = 50.0; //not the right word, but half the length.
 const DOOR_THRESHOLD: f32 = 5.0; // if within this distance of a door, need to have a key
 
+const WALL_X: f32 = 0.1 * 100.0;
+const WALL_Y: f32 = 1.0 * 100.0;
+const WALL_Z: f32 = 0.5 * 100.0;
+
+const DOOR_X: f32 = 0.1 * 100.0;
+const DOOR_Y: f32 = 0.33 * 100.0;
+const DOOR_Z: f32 = 0.25 * 100.0;
+
 pub struct WindowSettings {
     pub w: usize,
     pub h: usize,
