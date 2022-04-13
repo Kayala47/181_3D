@@ -6,6 +6,8 @@ use frenderer::camera::Camera;
 use frenderer::types::*;
 use frenderer::{Engine, Key, Result, WindowSettings};
 use std::rc::Rc;
+use std::collections::HashMap;
+use std::fs::File;
 
 const DT: f64 = 1.0 / 60.0;
 
@@ -20,6 +22,75 @@ impl GameObject {
         self.state.tick(DT);
     }
 }
+
+pub struct Room {
+    id: usize,
+    flats: [usize; 4], // indices of walls of the room.
+    connected_rooms: [usize; 4], //point by ID and N,E,S,W, -1 for no room
+}
+impl Room {
+
+    pub fn get_flats(&self) -> &[usize] {
+        & self.flats
+    }
+
+}
+
+pub struct RoomKey {
+    starts_roomid: usize, // the room that the key is in.
+    opens_roomid: usize, // the room they open to
+    sprite_index: usize, // corresponds to the index in the world sprites
+    picked_up: bool,
+}
+impl RoomKey {
+
+    pub fn get_sprite_index(& self) -> & usize{
+       & self.sprite_index
+    }
+
+    pub fn pick_up(mut self, game_state: &mut GameState){
+        self.picked_up = true;
+        game_state.keys_grabbed.push(self);
+        //TODO: make it disappear   en
+    }
+
+}
+
+pub struct Map {
+    start_room_id: usize,
+    rooms_list: HashMap<usize, Room>,
+    room_keys: Vec<RoomKey>,
+    end_room_id: usize,
+}
+impl Map {
+
+    pub fn new(start_room_id: usize, end_room_id: usize ) -> Self {
+        Self {
+            start_room_id,
+            rooms_list: HashMap::new(),
+            room_keys: vec![],
+            end_room_id
+        }
+    }
+    pub fn add_room(&mut self, id: usize, flats: [usize; 4], connected_rooms: [usize;4]) {
+        self.rooms_list.insert(id,Room {
+            id: id,
+            flats: flats,
+            connected_rooms: connected_rooms,
+        } );
+        
+    }
+
+    pub fn get_rooms_list(&mut self) -> &HashMap<usize, Room>  {
+        &self.rooms_list
+    }
+
+}
+pub struct GameState{
+    keys_grabbed: Vec<RoomKey>,
+}
+
+
 struct Sprite {
     trf: Isometry3,
     tex: frenderer::assets::TextureRef,
@@ -28,10 +99,11 @@ struct Sprite {
 }
 struct World {
     camera: Camera,
-    things: Vec<GameObject>,
+    things: Vec<GameObject>, // Add keys to things and give them a spinning animation???
     sprites: Vec<Sprite>,
     flats: Vec<Flat>,
     textured: Vec<Textured>,
+    map: Map,
 }
 struct Flat {
     trf: Similarity3,
@@ -41,6 +113,7 @@ struct Textured {
     trf: Similarity3,
     model: Rc<frenderer::renderer::textured::Model>,
 }
+
 impl frenderer::World for World {
     fn update(&mut self, input: &frenderer::Input, _assets: &mut frenderer::assets::Assets) {
         let yaw = input.key_axis(Key::Q, Key::W) * PI / 4.0 * DT as f32;
@@ -99,7 +172,7 @@ fn main() -> Result<()> {
     let mut engine: Engine = Engine::new(WindowSettings::default(), DT);
 
     let camera = Camera::look_at(
-        Vec3::new(0., 0., 100.),
+        Vec3::new(0., 200., 100.),
         Vec3::new(0., 0., 0.),
         Vec3::new(0., 1., 0.),
     );
@@ -126,6 +199,54 @@ fn main() -> Result<()> {
     assert_eq!(meshes.len(), 1);
     let model = engine.create_skinned_model(meshes, vec![tex]);
     let flat_model = engine.load_flat(std::path::Path::new("content/windmill.glb"))?;
+
+    let mut map = Map::new(0,5);
+    let file = File::open("content/world.json").unwrap();
+    let json: serde_json::Value = serde_json::from_reader(file).unwrap();
+    let rooms = json.get("rooms").unwrap();
+
+    for room in rooms.as_array().unwrap().iter(){
+        let room_id= room["id"].as_i64().unwrap() as usize;
+        let flats = room["flats"].as_array().unwrap();
+        let flats_arr: [usize; 4] = [
+            flats[0].as_i64().unwrap() as usize,
+            flats[1].as_i64().unwrap() as usize,
+            flats[2].as_i64().unwrap() as usize,
+            flats[3].as_i64().unwrap() as usize,
+        ];
+        let connected_rooms = room["connected_rooms"].as_array().unwrap();
+        let connected_rooms_arr: [usize; 4] = [
+                                                connected_rooms[0].as_i64().unwrap() as usize,
+                                                connected_rooms[1].as_i64().unwrap() as usize,
+                                                connected_rooms[2].as_i64().unwrap() as usize,
+                                                connected_rooms[3].as_i64().unwrap() as usize,
+                                            ];
+
+        map.add_room(room_id, flats_arr, connected_rooms_arr);
+    }
+
+    let mut flats_vec: Vec<Flat> = vec![];
+    let flats = json.get("flats").unwrap();
+    for flat in flats.as_array().unwrap().iter(){
+        let mut rot= Rotor3::identity();
+
+        if !(flat["is_identity"].as_bool().unwrap()) {
+            rot = Rotor3::from_rotation_xz(1.57079)
+        }
+
+        let x = flat["x"].as_f64().unwrap() as f32;
+        let y = -15.0;
+        let z = flat["z"].as_f64().unwrap() as f32;
+        
+
+        let new_flat = Flat {
+            trf:  Similarity3::new(Vec3::new(x,y,z), rot, 100.),
+            model: half_wall_model.clone()
+        };
+        flats_vec.push(new_flat);
+    
+    }
+
     let world = World {
         camera,
         things: vec![GameObject {
@@ -140,20 +261,7 @@ fn main() -> Result<()> {
             cel: Rect::new(0.5, 0.5, 0.5, 0.5),
             tex: king,
         }],
-        flats: vec![
-            Flat {
-                trf: Similarity3::new(Vec3::new(0.0, 0.0, -10.0), Rotor3::identity(), 1.0),
-                model: flat_model,
-            },
-            Flat {
-                trf: Similarity3::new(Vec3::new(0.0, -15.0, 0.0), Rotor3::identity(), 100.0),
-                model: half_wall_model.clone(),
-            },
-            Flat {
-                trf: Similarity3::new(Vec3::new(100.0, -15.0, 0.0), Rotor3::identity(), 100.0),
-                model: half_wall_model.clone(),
-            },
-        ],
+        flats: flats_vec,
         textured: vec![
             Textured {
                 trf: Similarity3::new(Vec3::new(0.0, 0.0, -10.0), Rotor3::identity(), 5.0),
@@ -164,6 +272,7 @@ fn main() -> Result<()> {
                 model: floor,
             },
         ],
+        map
     };
     engine.play(world)
 }
