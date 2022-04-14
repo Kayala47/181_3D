@@ -5,11 +5,55 @@ use frenderer::assets::AnimRef;
 use frenderer::camera::{Camera, FPCamera};
 use frenderer::types::*;
 use frenderer::{Engine, Key, Result, WindowSettings};
-use std::rc::Rc;
 use std::collections::HashMap;
 use std::fs::File;
+use std::rc::Rc;
 
 const DT: f64 = 1.0 / 60.0;
+
+const GRAB_THRESHOLD: f32 = 10.0;
+const ROOM_RADIUS: f32 = 50.0; //not the right word, but half the length.
+const DOOR_THRESHOLD: f32 = 5.0; // if within this distance of a door, need to have a key
+
+const WALL_X: f32 = 0.1 * 100.0;
+const WALL_Y: f32 = 1.0 * 100.0;
+const WALL_Z: f32 = 0.5 * 100.0;
+
+const DOOR_X: f32 = 0.1 * 100.0;
+const DOOR_Y: f32 = 0.33 * 100.0;
+const DOOR_Z: f32 = 0.25 * 100.0;
+
+pub struct Player {
+    object: GameObject,
+    keys_grabbed: Vec<RoomKey>,
+    current_room: usize, //id of room
+    map: Map,            //so the player knows about the rooms
+}
+
+impl Player {
+    pub fn grab(&mut self) {
+        //checks if keys are nearby and grabs them
+
+        let curr_pos = self.object.transform.translation;
+
+        //two steps: filter out the ones that match first, then actually pick them up
+
+        let keys = &mut world
+            .rooms_list
+            .get_mut(&self.current_room)
+            .unwrap()
+            .objects;
+
+        if let Some(pos) = keys
+            .iter()
+            .position(|k| distance(curr_pos, k.gameobject.transform.translation) < GRAB_THRESHOLD)
+        {
+            //check distance
+            let key = keys.swap_remove(pos);
+            key.pick_up(self);
+        }
+    }
+}
 
 pub struct GameObject {
     trf: Similarity3,
@@ -25,71 +69,88 @@ impl GameObject {
 
 pub struct Room {
     id: usize,
-    flats: [usize; 4], // indices of walls of the room.
+    flats: [usize; 4],           // indices of walls of the room.
     connected_rooms: [usize; 4], //point by ID and N,E,S,W, -1 for no room
 }
 impl Room {
-
     pub fn get_flats(&self) -> &[usize] {
-        & self.flats
+        &self.flats
     }
-
 }
 
 pub struct RoomKey {
     starts_roomid: usize, // the room that the key is in.
-    opens_roomid: usize, // the room they open to
-    sprite_index: usize, // corresponds to the index in the world sprites
+    opens_roomid: usize,  // the room they open to
+    sprite_index: usize,  // corresponds to the index in the world sprites
     picked_up: bool,
 }
 impl RoomKey {
-
-    pub fn get_sprite_index(& self) -> & usize{
-       & self.sprite_index
+    pub fn get_sprite_index(&self) -> &usize {
+        &self.sprite_index
     }
 
-    pub fn pick_up(mut self, game_state: &mut GameState){
+    pub fn pick_up(mut self, game_state: &mut GameState) {
         self.picked_up = true;
         game_state.keys_grabbed.push(self);
         //TODO: make it disappear   en
     }
-
 }
 
 pub struct Map {
     start_room_id: usize,
     rooms_list: HashMap<usize, Room>,
-    room_keys: Vec<RoomKey>,
+    room_keys: HashMap<usize, Vec<RoomKey>>, // list of every key found in each room
     end_room_id: usize,
 }
 impl Map {
-
-    pub fn new(start_room_id: usize, end_room_id: usize ) -> Self {
+    pub fn new(start_room_id: usize, end_room_id: usize) -> Self {
         Self {
             start_room_id,
             rooms_list: HashMap::new(),
-            room_keys: vec![],
-            end_room_id
+            room_keys: HashMap::new(),
+            end_room_id,
         }
     }
-    pub fn add_room(&mut self, id: usize, flats: [usize; 4], connected_rooms: [usize;4]) {
-        self.rooms_list.insert(id,Room {
-            id: id,
-            flats: flats,
-            connected_rooms: connected_rooms,
-        } );
-        
+    pub fn add_room(&mut self, id: usize, flats: [usize; 4], connected_rooms: [usize; 4]) {
+        self.rooms_list.insert(
+            id,
+            Room {
+                id: id,
+                flats: flats,
+                connected_rooms: connected_rooms,
+            },
+        );
     }
 
-    pub fn get_rooms_list(&mut self) -> &HashMap<usize, Room>  {
+    pub fn add_key(&mut self, starts_roomid: usize, opens_roomid: usize, sprite_index: usize) {
+        let key = RoomKey {
+            starts_roomid,
+            opens_roomid,
+            sprite_index,
+            picked_up: false,
+        };
+
+        match self.room_keys.get_mut(&starts_roomid) {
+            Some(l) => {
+                l.push(key);
+            }
+            None => {
+                self.room_keys.insert(starts_roomid, vec![key]);
+            }
+        }
+    }
+
+    pub fn get_rooms_list(&mut self) -> &HashMap<usize, Room> {
         &self.rooms_list
     }
-
 }
-pub struct GameState{
+pub struct GameState {
     keys_grabbed: Vec<RoomKey>,
 }
 
+fn distance(v1: Vec3, v2: Vec3) -> f32 {
+    (v1 - v2).mag()
+}
 
 struct Sprite {
     trf: Isometry3,
@@ -133,11 +194,15 @@ impl frenderer::World for World {
 
         let move_z = input.key_axis(Key::Down, Key::Up) as f32;
         let move_x = input.key_axis(Key::Right, Key::Left) as f32;
-        
+
         let s = &mut self.player;
         s.trf.append_translation(Vec3::new(move_x, 0., move_z));
-        
-        self.fp_camera.update(&input, self.player.trf.translation,self.player.trf.rotation);
+
+        self.fp_camera.update(
+            &input,
+            self.player.trf.translation,
+            self.player.trf.rotation,
+        );
         self.fp_camera.update_camera(&mut self.camera);
 
         for s in self.sprites.iter_mut() {
@@ -157,8 +222,6 @@ impl frenderer::World for World {
 
         //let camera_drot = input.key_axis(Key::Left, Key::Right) * PI / 4.0 * DT as f32;
         //self.camera.transform.prepend_rotation(Rotor3::from_rotation_xz(camera_drot));
-
-
     }
     fn render(
         &mut self,
@@ -217,13 +280,13 @@ fn main() -> Result<()> {
     let model = engine.create_skinned_model(meshes, vec![tex]);
     let flat_model = engine.load_flat(std::path::Path::new("content/windmill.glb"))?;
 
-    let mut map = Map::new(0,5);
+    let mut map = Map::new(0, 5);
     let file = File::open("content/world.json").unwrap();
     let json: serde_json::Value = serde_json::from_reader(file).unwrap();
     let rooms = json.get("rooms").unwrap();
 
-    for room in rooms.as_array().unwrap().iter(){
-        let room_id= room["id"].as_i64().unwrap() as usize;
+    for room in rooms.as_array().unwrap().iter() {
+        let room_id = room["id"].as_i64().unwrap() as usize;
         let flats = room["flats"].as_array().unwrap();
         let flats_arr: [usize; 4] = [
             flats[0].as_i64().unwrap() as usize,
@@ -233,19 +296,19 @@ fn main() -> Result<()> {
         ];
         let connected_rooms = room["connected_rooms"].as_array().unwrap();
         let connected_rooms_arr: [usize; 4] = [
-                                                connected_rooms[0].as_i64().unwrap() as usize,
-                                                connected_rooms[1].as_i64().unwrap() as usize,
-                                                connected_rooms[2].as_i64().unwrap() as usize,
-                                                connected_rooms[3].as_i64().unwrap() as usize,
-                                            ];
+            connected_rooms[0].as_i64().unwrap() as usize,
+            connected_rooms[1].as_i64().unwrap() as usize,
+            connected_rooms[2].as_i64().unwrap() as usize,
+            connected_rooms[3].as_i64().unwrap() as usize,
+        ];
 
         map.add_room(room_id, flats_arr, connected_rooms_arr);
     }
 
     let mut flats_vec: Vec<Flat> = vec![];
     let flats = json.get("flats").unwrap();
-    for flat in flats.as_array().unwrap().iter(){
-        let mut rot= Rotor3::identity();
+    for flat in flats.as_array().unwrap().iter() {
+        let mut rot = Rotor3::identity();
 
         if !(flat["is_identity"].as_bool().unwrap()) {
             rot = Rotor3::from_rotation_xz(1.57079)
@@ -254,16 +317,13 @@ fn main() -> Result<()> {
         let x = flat["x"].as_f64().unwrap() as f32;
         let y = -15.0;
         let z = flat["z"].as_f64().unwrap() as f32;
-        
+
         let new_flat = Flat {
-            trf:  Similarity3::new(Vec3::new(x,y,z), rot, 100.),
-            model: half_wall_model.clone()
+            trf: Similarity3::new(Vec3::new(x, y, z), rot, 100.),
+            model: half_wall_model.clone(),
         };
         flats_vec.push(new_flat);
-    
     }
-
-
 
     let world = World {
         camera,
@@ -292,7 +352,7 @@ fn main() -> Result<()> {
                 model: floor,
             },
         ],
-        map
+        map,
     };
     engine.play(world)
 }
