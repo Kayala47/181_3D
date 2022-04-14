@@ -62,6 +62,15 @@ impl Engine {
     pub fn set_camera(&mut self, cam:Camera) {
         self.camera = cam;
     }
+
+    pub fn get_camera(&mut self) -> &mut Camera {
+        &mut self.camera
+    }
+
+    pub fn get_input(&mut self) -> &Input {
+        &self.input
+    }
+
     pub fn create_game_object(&mut self, model:Option<&Model>, trf:Isometry3) -> &mut GameObject {
         self.objects.push(GameObject{model:model.cloned(), transform:trf});
         self.objects.last_mut().unwrap()
@@ -213,6 +222,52 @@ impl Engine {
         vulkan.execute_commands(command_buffer, image_num);
     }
 }
+
+pub struct Room {
+    id: usize,
+    gameobject: GameObject,
+    objects: Vec<Key>,
+    doors: [bool; 4], //N, E, S, W yes/no for doors
+    connected_rooms: [usize; 4], //point by ID
+
+}
+
+impl Room {
+    pub fn move_by(&mut self, vec:Vec3) {
+        self.gameobject.move_by(vec);
+    }
+
+}
+
+pub struct Key {
+    roomid: usize, //the room they open to
+    gameobject: GameObject,
+    picked_up: bool,
+
+}
+
+impl Key {
+    pub fn move_by(&mut self, vec:Vec3) {
+        self.gameobject.move_by(vec);
+    }
+
+    pub fn pick_up(mut self, game_state: &mut GameState){
+        self.picked_up = true;
+        game_state.keys_grabbed.push(self);
+        //TODO: make it disappear   en
+    }
+}
+
+pub struct World {
+    start_room: Room,
+    rooms_list: HashMap<usize, Room>,
+    end_room: Room,
+}
+
+pub struct GameState{
+    keys_grabbed: Vec<Key>,
+}
+
 
 pub struct GameObject {
     model:Option<Model>,
