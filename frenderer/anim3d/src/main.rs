@@ -2,7 +2,7 @@
 
 use frenderer::animation::{AnimationSettings, AnimationState};
 use frenderer::assets::AnimRef;
-use frenderer::camera::Camera;
+use frenderer::camera::{Camera, FPCamera};
 use frenderer::types::*;
 use frenderer::{Engine, Key, Result, WindowSettings};
 use std::rc::Rc;
@@ -11,7 +11,7 @@ use std::fs::File;
 
 const DT: f64 = 1.0 / 60.0;
 
-struct GameObject {
+pub struct GameObject {
     trf: Similarity3,
     model: Rc<frenderer::renderer::skinned::Model>,
     animation: AnimRef,
@@ -99,7 +99,9 @@ struct Sprite {
 }
 struct World {
     camera: Camera,
+    fp_camera: FPCamera,
     things: Vec<GameObject>, // Add keys to things and give them a spinning animation???
+    player: GameObject,
     sprites: Vec<Sprite>,
     flats: Vec<Flat>,
     textured: Vec<Textured>,
@@ -116,35 +118,47 @@ struct Textured {
 
 impl frenderer::World for World {
     fn update(&mut self, input: &frenderer::Input, _assets: &mut frenderer::assets::Assets) {
-        let yaw = input.key_axis(Key::Q, Key::W) * PI / 4.0 * DT as f32;
-        let pitch = input.key_axis(Key::A, Key::S) * PI / 4.0 * DT as f32;
-        let roll = input.key_axis(Key::Z, Key::X) * PI / 4.0 * DT as f32;
-        let dscale = input.key_axis(Key::E, Key::R) * 1.0 * DT as f32;
-        let rot = Rotor3::from_euler_angles(roll, pitch, yaw);
+        //let yaw = input.key_axis(Key::Q, Key::W) * PI / 4.0 * DT as f32;
+        //let pitch = input.key_axis(Key::A, Key::S) * PI / 4.0 * DT as f32;
+        //let roll = input.key_axis(Key::Z, Key::X) * PI / 4.0 * DT as f32;
+        //let dscale = input.key_axis(Key::E, Key::R) * 1.0 * DT as f32;
+        //let rot = Rotor3::from_euler_angles(roll, pitch, yaw);
+
         for obj in self.things.iter_mut() {
-            obj.trf.append_rotation(rot);
-            obj.trf.scale = (obj.trf.scale + dscale).max(0.01);
+            //obj.trf.append_rotation(rot);
+            //obj.trf.scale = (obj.trf.scale + dscale).max(0.01);
             // dbg!(obj.trf.rotation);
             obj.tick_animation();
         }
 
+        let move_z = input.key_axis(Key::Down, Key::Up) as f32;
+        let move_x = input.key_axis(Key::Right, Key::Left) as f32;
+        
+        let s = &mut self.player;
+        s.trf.append_translation(Vec3::new(move_x, 0., move_z));
+        
+        self.fp_camera.update(&input, self.player.trf.translation,self.player.trf.rotation);
+        self.fp_camera.update_camera(&mut self.camera);
+
         for s in self.sprites.iter_mut() {
-            s.trf.append_rotation(rot);
-            s.size.x += dscale;
-            s.size.y += dscale;
+            //s.trf.append_rotation(rot);
+            //s.size.x += dscale;
+            //s.size.y += dscale;
         }
+
         for m in self.flats.iter_mut() {
-            m.trf.append_rotation(rot);
-            m.trf.scale += dscale;
+            //m.trf.append_rotation(rot);
+            //m.trf.scale += dscale;
         }
         for m in self.textured.iter_mut() {
-            m.trf.append_rotation(rot);
-            m.trf.scale += dscale;
+            //m.trf.append_rotation(rot);
+            //sm.trf.scale += dscale;
         }
-        let camera_drot = input.key_axis(Key::Left, Key::Right) * PI / 4.0 * DT as f32;
-        self.camera
-            .transform
-            .prepend_rotation(Rotor3::from_rotation_xz(camera_drot));
+
+        //let camera_drot = input.key_axis(Key::Left, Key::Right) * PI / 4.0 * DT as f32;
+        //self.camera.transform.prepend_rotation(Rotor3::from_rotation_xz(camera_drot));
+
+
     }
     fn render(
         &mut self,
@@ -158,6 +172,8 @@ impl frenderer::World for World {
         for (s_i, s) in self.sprites.iter_mut().enumerate() {
             rs.render_sprite(s.tex, s.cel, s.trf, s.size, s_i);
         }
+        let obj = &self.player;
+        rs.render_skinned(obj.model.clone(), obj.animation, obj.state, obj.trf, 0);
         for (m_i, m) in self.flats.iter_mut().enumerate() {
             rs.render_flat(m.model.clone(), m.trf, m_i);
         }
@@ -172,10 +188,11 @@ fn main() -> Result<()> {
     let mut engine: Engine = Engine::new(WindowSettings::default(), DT);
 
     let camera = Camera::look_at(
-        Vec3::new(0., 200., 100.),
+        Vec3::new(0., 100., 100.),
         Vec3::new(0., 0., 0.),
         Vec3::new(0., 1., 0.),
     );
+    let fp_camera = FPCamera::new();
 
     let marble_tex = engine.load_texture(std::path::Path::new("content/sphere-diffuse.jpg"))?;
     let marble_meshes = engine.load_textured(std::path::Path::new("content/sphere.obj"))?;
@@ -238,7 +255,6 @@ fn main() -> Result<()> {
         let y = -15.0;
         let z = flat["z"].as_f64().unwrap() as f32;
         
-
         let new_flat = Flat {
             trf:  Similarity3::new(Vec3::new(x,y,z), rot, 100.),
             model: half_wall_model.clone()
@@ -247,14 +263,18 @@ fn main() -> Result<()> {
     
     }
 
+
+
     let world = World {
         camera,
-        things: vec![GameObject {
+        fp_camera,
+        things: vec![],
+        player: GameObject {
             trf: Similarity3::new(Vec3::new(-20.0, -15.0, -10.0), Rotor3::identity(), 0.1),
             model,
             animation,
             state: AnimationState { t: 0.0 },
-        }],
+        },
         sprites: vec![Sprite {
             trf: Isometry3::new(Vec3::new(20.0, 5.0, -10.0), Rotor3::identity()),
             size: Vec2::new(16.0, 16.0),
