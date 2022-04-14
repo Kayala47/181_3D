@@ -31,23 +31,19 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn grab(&mut self) {
+    pub fn grab(&mut self, world: &World) {
         //checks if keys are nearby and grabs them
+        println!("grabbed");
 
-        let curr_pos = self.object.transform.translation;
+        let curr_pos = self.object.trf.translation;
 
         //two steps: filter out the ones that match first, then actually pick them up
 
-        let keys = &mut world
-            .rooms_list
-            .get_mut(&self.current_room)
-            .unwrap()
-            .objects;
+        let keys = self.map.room_keys.get_mut(&self.current_room).unwrap();
 
-        if let Some(pos) = keys
-            .iter()
-            .position(|k| distance(curr_pos, k.gameobject.transform.translation) < GRAB_THRESHOLD)
-        {
+        if let Some(pos) = keys.iter().position(|k| {
+            distance(curr_pos, world.sprites[k.sprite_index].trf.translation) < GRAB_THRESHOLD
+        }) {
             //check distance
             let key = keys.swap_remove(pos);
             key.pick_up(self);
@@ -89,7 +85,7 @@ impl RoomKey {
         &self.sprite_index
     }
 
-    pub fn pick_up(mut self, game_state: &mut GameState) {
+    pub fn pick_up(mut self, game_state: &mut Player) {
         self.picked_up = true;
         game_state.keys_grabbed.push(self);
         //TODO: make it disappear   en
@@ -158,15 +154,14 @@ struct Sprite {
     cel: Rect,
     size: Vec2,
 }
-struct World {
+pub struct World {
     camera: Camera,
     fp_camera: FPCamera,
     things: Vec<GameObject>, // Add keys to things and give them a spinning animation???
-    player: GameObject,
+    player: Player,
     sprites: Vec<Sprite>,
     flats: Vec<Flat>,
     textured: Vec<Textured>,
-    map: Map,
 }
 struct Flat {
     trf: Similarity3,
@@ -195,13 +190,13 @@ impl frenderer::World for World {
         let move_z = input.key_axis(Key::Down, Key::Up) as f32;
         let move_x = input.key_axis(Key::Right, Key::Left) as f32;
 
-        let s = &mut self.player;
+        let s = &mut self.player.object;
         s.trf.append_translation(Vec3::new(move_x, 0., move_z));
 
         self.fp_camera.update(
             &input,
-            self.player.trf.translation,
-            self.player.trf.rotation,
+            self.player.object.trf.translation,
+            self.player.object.trf.rotation,
         );
         self.fp_camera.update_camera(&mut self.camera);
 
@@ -235,7 +230,7 @@ impl frenderer::World for World {
         for (s_i, s) in self.sprites.iter_mut().enumerate() {
             rs.render_sprite(s.tex, s.cel, s.trf, s.size, s_i);
         }
-        let obj = &self.player;
+        let obj = &self.player.object;
         rs.render_skinned(obj.model.clone(), obj.animation, obj.state, obj.trf, 0);
         for (m_i, m) in self.flats.iter_mut().enumerate() {
             rs.render_flat(m.model.clone(), m.trf, m_i);
@@ -281,6 +276,7 @@ fn main() -> Result<()> {
     let flat_model = engine.load_flat(std::path::Path::new("content/windmill.glb"))?;
 
     let mut map = Map::new(0, 5);
+    map.add_key(0, 1, 0);
     let file = File::open("content/world.json").unwrap();
     let json: serde_json::Value = serde_json::from_reader(file).unwrap();
     let rooms = json.get("rooms").unwrap();
@@ -325,15 +321,22 @@ fn main() -> Result<()> {
         flats_vec.push(new_flat);
     }
 
+    let player_obj = GameObject {
+        trf: Similarity3::new(Vec3::new(-20.0, -15.0, -10.0), Rotor3::identity(), 0.1),
+        model,
+        animation,
+        state: AnimationState { t: 0.0 },
+    };
+
     let world = World {
         camera,
         fp_camera,
         things: vec![],
-        player: GameObject {
-            trf: Similarity3::new(Vec3::new(-20.0, -15.0, -10.0), Rotor3::identity(), 0.1),
-            model,
-            animation,
-            state: AnimationState { t: 0.0 },
+        player: Player {
+            object: player_obj,
+            keys_grabbed: vec![],
+            current_room: map.start_room_id,
+            map,
         },
         sprites: vec![Sprite {
             trf: Isometry3::new(Vec3::new(20.0, 5.0, -10.0), Rotor3::identity()),
@@ -352,7 +355,6 @@ fn main() -> Result<()> {
                 model: floor,
             },
         ],
-        map,
     };
     engine.play(world)
 }
