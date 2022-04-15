@@ -12,7 +12,7 @@ use std::rc::Rc;
 
 const DT: f64 = 1.0 / 60.0;
 
-const GRAB_THRESHOLD: f32 = 10.0;
+const GRAB_THRESHOLD: f32 = 100.0;
 const ROOM_RADIUS: f32 = 50.0; //not the right word, but half the length.
 const DOOR_THRESHOLD: f32 = 5.0; // if within this distance of a door, need to have a key
 
@@ -32,7 +32,7 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn grab(&mut self, sprites: &Vec<Sprite>) {
+    pub fn grab(&mut self, sprites: &[Sprite]) {
         //checks if keys are nearby and grabs them
 
         let curr_pos = self.object.trf.translation;
@@ -54,6 +54,16 @@ impl Player {
 
     pub fn change_room(&mut self, new_roomid: usize) {
         self.current_room = new_roomid;
+    }
+}
+
+impl fmt::Debug for Player {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Player")
+            .field("curr_roomid", &self.current_room)
+            .field("pos", &self.object.trf.translation)
+            .field("keys_grabbed", &self.keys_grabbed)
+            .finish()
     }
 }
 
@@ -169,6 +179,15 @@ pub struct Sprite {
     tex: frenderer::assets::TextureRef,
     cel: Rect,
     size: Vec2,
+}
+
+impl fmt::Debug for Sprite {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Sprite")
+            .field("trf", &self.trf)
+            .field("pos", &self.trf.translation)
+            .finish()
+    }
 }
 pub struct World {
     camera: Camera,
@@ -349,7 +368,19 @@ fn main() -> Result<()> {
         state: AnimationState { t: 0.0 },
     };
 
-    // let key_sprite =
+    let key_sprite = Sprite {
+        trf: Isometry3::new(Vec3::new(20.0, 5.0, -10.0), Rotor3::identity()),
+        size: Vec2::new(16.0, 16.0),
+        cel: Rect::new(0.5, 0.5, 0.5, 0.5),
+        tex: king,
+    };
+
+    let key_str = RoomKey {
+        starts_roomid: 0,
+        opens_roomid: 1,
+        sprite_index: 0,
+        picked_up: false,
+    };
 
     let world = World {
         camera,
@@ -361,12 +392,7 @@ fn main() -> Result<()> {
             current_room: map.start_room_id,
             map,
         },
-        sprites: vec![Sprite {
-            trf: Isometry3::new(Vec3::new(20.0, 5.0, -10.0), Rotor3::identity()),
-            size: Vec2::new(16.0, 16.0),
-            cel: Rect::new(0.5, 0.5, 0.5, 0.5),
-            tex: king,
-        }],
+        sprites: vec![key_sprite],
         flats: flats_vec,
         textured: vec![
             Textured {
@@ -379,5 +405,8 @@ fn main() -> Result<()> {
             },
         ],
     };
+
+    dbg!(&world.sprites[0]);
+    dbg!(&world.player);
     engine.play(world)
 }
