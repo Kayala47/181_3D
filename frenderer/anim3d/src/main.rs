@@ -6,6 +6,7 @@ use frenderer::camera::{Camera, FPCamera};
 use frenderer::types::*;
 use frenderer::{Engine, Key, Result, WindowSettings};
 use std::collections::HashMap;
+use std::fmt;
 use std::fs::File;
 use std::rc::Rc;
 
@@ -31,9 +32,8 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn grab(&mut self, world: &World) {
+    pub fn grab(&mut self, sprites: &Vec<Sprite>) {
         //checks if keys are nearby and grabs them
-        println!("grabbed");
 
         let curr_pos = self.object.trf.translation;
 
@@ -42,12 +42,18 @@ impl Player {
         let keys = self.map.room_keys.get_mut(&self.current_room).unwrap();
 
         if let Some(pos) = keys.iter().position(|k| {
-            distance(curr_pos, world.sprites[k.sprite_index].trf.translation) < GRAB_THRESHOLD
+            let sprite = sprites[k.sprite_index].trf.translation;
+            distance(curr_pos, sprite) < GRAB_THRESHOLD
         }) {
-            //check distance
+            println!("attempting to grab something");
             let key = keys.swap_remove(pos);
+            dbg!(&key);
             key.pick_up(self);
         }
+    }
+
+    pub fn change_room(&mut self, new_roomid: usize) {
+        self.current_room = new_roomid;
     }
 }
 
@@ -89,6 +95,16 @@ impl RoomKey {
         self.picked_up = true;
         game_state.keys_grabbed.push(self);
         //TODO: make it disappear   en
+    }
+}
+
+impl fmt::Debug for RoomKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RoomKey")
+            .field("starts_roomid", &self.starts_roomid)
+            .field("opens_roomid", &self.opens_roomid)
+            .field("sprite_index", &self.sprite_index)
+            .finish()
     }
 }
 
@@ -148,7 +164,7 @@ fn distance(v1: Vec3, v2: Vec3) -> f32 {
     (v1 - v2).mag()
 }
 
-struct Sprite {
+pub struct Sprite {
     trf: Isometry3,
     tex: frenderer::assets::TextureRef,
     cel: Rect,
@@ -159,7 +175,7 @@ pub struct World {
     fp_camera: FPCamera,
     things: Vec<GameObject>, // Add keys to things and give them a spinning animation???
     player: Player,
-    sprites: Vec<Sprite>,
+    pub sprites: Vec<Sprite>,
     flats: Vec<Flat>,
     textured: Vec<Textured>,
 }
@@ -189,6 +205,11 @@ impl frenderer::World for World {
 
         let move_z = input.key_axis(Key::Down, Key::Up) as f32;
         let move_x = input.key_axis(Key::Right, Key::Left) as f32;
+        let grab = input.is_key_released(Key::Space);
+
+        if grab {
+            self.player.grab(&self.sprites);
+        }
 
         let s = &mut self.player.object;
         s.trf.append_translation(Vec3::new(move_x, 0., move_z));
@@ -327,6 +348,8 @@ fn main() -> Result<()> {
         animation,
         state: AnimationState { t: 0.0 },
     };
+
+    // let key_sprite =
 
     let world = World {
         camera,
