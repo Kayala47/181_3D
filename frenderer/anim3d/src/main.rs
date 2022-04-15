@@ -32,7 +32,7 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn grab(&mut self, sprites: &[Sprite]) {
+    pub fn grab(&mut self, sprites: &mut Vec<Sprite>) {
         //checks if keys are nearby and grabs them
 
         let curr_pos = self.object.trf.translation;
@@ -41,15 +41,18 @@ impl Player {
 
         let keys = self.map.room_keys.get_mut(&self.current_room).unwrap();
 
-        if let Some(pos) = keys.iter().position(|k| {
-            let sprite = sprites[k.sprite_index].trf.translation;
-            distance(curr_pos, sprite) < GRAB_THRESHOLD
+        if let Some(pos) = sprites.iter().position(|s| {
+            let sprite_pos = s.trf.translation;
+            distance(curr_pos, sprite_pos) < GRAB_THRESHOLD
         }) {
             println!("attempting to grab something");
             let key = keys.swap_remove(pos);
+            sprites.remove(pos);
             dbg!(&key);
+
             key.pick_up(self);
         }
+        dbg!(&sprites);
     }
 
     pub fn change_room(&mut self, new_roomid: usize) {
@@ -222,12 +225,14 @@ impl frenderer::World for World {
             obj.tick_animation();
         }
 
-        let move_z = input.key_axis(Key::Down, Key::Up) as f32;
-        let move_x = input.key_axis(Key::Right, Key::Left) as f32;
+        // let move_z = input.key_axis(Key::Down, Key::Up) as f32;
+        // let move_x = input.key_axis(Key::LEFT, Key::RIGHT) as f32;
+        let move_z = input.key_axis(Key::S, Key::W) as f32;
+        let move_x = input.key_axis(Key::D, Key::A) as f32;
         let grab = input.is_key_released(Key::Space);
 
         if grab {
-            self.player.grab(&self.sprites);
+            self.player.grab(&mut self.sprites);
         }
 
         let s = &mut self.player.object;
@@ -345,9 +350,10 @@ fn main() -> Result<()> {
     let flats = json.get("flats").unwrap();
     for flat in flats.as_array().unwrap().iter() {
         let mut rot = Rotor3::identity();
+        //1.57079 Rust was complaining about this value. now is std::f32::consts::FRAC_PI_2
 
         if !(flat["is_identity"].as_bool().unwrap()) {
-            rot = Rotor3::from_rotation_xz(1.57079)
+            rot = Rotor3::from_rotation_xz(std::f32::consts::FRAC_PI_2)
         }
 
         let x = flat["x"].as_f64().unwrap() as f32;
