@@ -49,7 +49,7 @@ impl Player {
 
         //skip the first one
         let mut tex_iter = textureds.iter();
-        // tex_iter.next();
+        tex_iter.next();
 
         if let Some(pos) = tex_iter.position(|s| {
             let sprite_pos = s.trf.translation;
@@ -422,19 +422,20 @@ fn main() -> Result<()> {
         state: AnimationState { t: 0.0 },
     };
 
-    // let key_sprite = Sprite {
-    //     trf: Isometry3::new(Vec3::new(20.0, 5.0, -10.0), Rotor3::identity()),
-    //     size: Vec2::new(16.0, 16.0),
-    //     cel: Rect::new(0.5, 0.5, 0.5, 0.5),
-    //     tex: king,
-    // };
+    let key_positions = vec![
+        Similarity3::new(Vec3::new(0.0, 0.0, -10.0), Rotor3::identity(), 5.0),
+        Similarity3::new(Vec3::new(10.0, 0.0, -10.0), Rotor3::identity(), 5.0),
+    ];
 
-    // let key_str = RoomKey {
-    //     starts_roomid: 0,
-    //     opens_roomid: 1,
-    //     sprite_index: 0,
-    //     picked_up: false,
-    // };
+    let (mut keys, mut key_textureds) =
+        multiple_key_pairs(key_positions, marble, vec![(0, 1), (0, 2)]);
+
+    //start w just the floor and then add keys
+    let mut all_textureds = vec![Textured {
+        trf: Similarity3::new(Vec3::new(0.0, -25.0, 0.0), Rotor3::identity(), 10.0),
+        model: floor,
+    }];
+    all_textureds.append(&mut key_textureds);
 
     let world = World {
         camera,
@@ -448,20 +449,7 @@ fn main() -> Result<()> {
         },
         sprites: vec![],
         flats: flats_vec,
-        textured: vec![
-            Textured {
-                trf: Similarity3::new(Vec3::new(0.0, -25.0, 0.0), Rotor3::identity(), 10.0),
-                model: floor,
-            },
-            Textured {
-                trf: Similarity3::new(Vec3::new(0.0, 0.0, -10.0), Rotor3::identity(), 5.0),
-                model: Rc::clone(&marble),
-            },
-            Textured {
-                trf: Similarity3::new(Vec3::new(10.0, 0.0, -10.0), Rotor3::identity(), 5.0),
-                model: Rc::clone(&marble),
-            },
-        ],
+        textured: all_textureds,
     };
 
     engine.play(world)
