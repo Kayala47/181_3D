@@ -36,10 +36,6 @@ impl Player {
     pub fn grab(&mut self, textureds: &mut Vec<Textured>) {
         //checks if keys are nearby and grabs them
 
-        // textureds.remove(1);
-
-        dbg!(textureds[1].trf.translation);
-
         let curr_pos = self.object.trf.translation;
         dbg!(curr_pos);
 
@@ -47,21 +43,28 @@ impl Player {
 
         let keys = self.map.room_keys.get_mut(&self.current_room).unwrap();
 
-        //skip the first one
+        //skip the first one (it's the floor)
         let mut tex_iter = textureds.iter();
         tex_iter.next();
 
-        if let Some(pos) = tex_iter.position(|s| {
-            let sprite_pos = s.trf.translation;
-            distance(curr_pos, sprite_pos) < GRAB_THRESHOLD
+        if let Some(pos) = tex_iter.position(|t| {
+            let textured_pos = t.trf.translation;
+            distance(curr_pos, textured_pos) < GRAB_THRESHOLD
         }) {
             println!("attempting to grab something");
-            let key = keys.swap_remove(pos);
-            dbg!(textureds.remove(pos + 1));
+            dbg!(&pos);
+            dbg!(&keys);
+            let key = keys.remove(pos);
             dbg!(&key);
 
             key.pick_up(self);
+
+            dbg!(textureds.remove(pos + 1));
         }
+
+        dbg!(&self.map.room_keys.get(&self.current_room).unwrap());
+        dbg!(textureds);
+        dbg!(&self.keys_grabbed);
     }
 
     pub fn change_room(&mut self, new_roomid: usize) {
@@ -129,8 +132,11 @@ fn gen_key_pair(
     model: &Rc<Model>,
     starts: usize,
     opens: usize,
-) -> (RoomKey, Textured) {
+) -> ((usize, usize), Textured) {
     //creates a RoomKey object that is matched with a Textured object
+
+    //TODO: at some point, the transform will take the place of start and we'll need to figure out
+    //which room the key is based on the position of the texture
 
     let texture = Textured {
         trf,
@@ -143,14 +149,14 @@ fn gen_key_pair(
         picked_up: false,
     };
 
-    (key, texture)
+    ((starts, opens), texture)
 }
 
 fn multiple_key_pairs(
     trfs: Vec<Similarity3>,
     model: Rc<Model>,
     start_open: Vec<(usize, usize)>,
-) -> (Vec<RoomKey>, Vec<Textured>) {
+) -> (Vec<(usize, usize)>, Vec<Textured>) {
     let mut keys = vec![];
     let mut textures = vec![];
 
@@ -203,6 +209,12 @@ impl Map {
             None => {
                 self.room_keys.insert(starts_roomid, vec![key]);
             }
+        }
+    }
+
+    pub fn add_mult_keys(&mut self, starts_opens: Vec<(usize, usize)>) {
+        for (s, o) in starts_opens.iter() {
+            self.add_key(*s, *o);
         }
     }
 
@@ -369,7 +381,6 @@ fn main() -> Result<()> {
     let flat_model = engine.load_flat(std::path::Path::new("content/windmill.glb"))?;
 
     let mut map = Map::new(0, 5);
-    map.add_key(0, 1);
     let file = File::open("content/world.json").unwrap();
     let json: serde_json::Value = serde_json::from_reader(file).unwrap();
     let rooms = json.get("rooms").unwrap();
@@ -425,10 +436,13 @@ fn main() -> Result<()> {
     let key_positions = vec![
         Similarity3::new(Vec3::new(0.0, 0.0, -10.0), Rotor3::identity(), 5.0),
         Similarity3::new(Vec3::new(10.0, 0.0, -10.0), Rotor3::identity(), 5.0),
+        Similarity3::new(Vec3::new(0.0, 10.0, -15.0), Rotor3::identity(), 5.0),
     ];
 
-    let (mut keys, mut key_textureds) =
-        multiple_key_pairs(key_positions, marble, vec![(0, 1), (0, 2)]);
+    let (keys, mut key_textureds) =
+        multiple_key_pairs(key_positions, marble, vec![(0, 1), (0, 2), (0, 3), (0, 4)]);
+
+    map.add_mult_keys(keys);
 
     //start w just the floor and then add keys
     let mut all_textureds = vec![Textured {
