@@ -3,6 +3,7 @@
 use frenderer::animation::{AnimationSettings, AnimationState};
 use frenderer::assets::{AnimRef, Texture};
 use frenderer::camera::{Camera, FPCamera};
+use frenderer::renderer::textured::Model;
 use frenderer::types::*;
 use frenderer::{Engine, Key, Result, WindowSettings};
 use std::collections::HashMap;
@@ -104,14 +105,9 @@ impl Room {
 pub struct RoomKey {
     starts_roomid: usize, // the room that the key is in.
     opens_roomid: usize,  // the room they open to
-    sprite_index: usize,  // corresponds to the index in the world sprites
     picked_up: bool,
 }
 impl RoomKey {
-    pub fn get_sprite_index(&self) -> &usize {
-        &self.sprite_index
-    }
-
     pub fn pick_up(mut self, game_state: &mut Player) {
         self.picked_up = true;
         game_state.keys_grabbed.push(self);
@@ -124,9 +120,47 @@ impl fmt::Debug for RoomKey {
         f.debug_struct("RoomKey")
             .field("starts_roomid", &self.starts_roomid)
             .field("opens_roomid", &self.opens_roomid)
-            .field("sprite_index", &self.sprite_index)
             .finish()
     }
+}
+
+fn gen_key_pair(
+    trf: Similarity3,
+    model: &Rc<Model>,
+    starts: usize,
+    opens: usize,
+) -> (RoomKey, Textured) {
+    //creates a RoomKey object that is matched with a Textured object
+
+    let texture = Textured {
+        trf,
+        model: Rc::clone(model),
+    };
+
+    let key = RoomKey {
+        starts_roomid: starts,
+        opens_roomid: opens,
+        picked_up: false,
+    };
+
+    (key, texture)
+}
+
+fn multiple_key_pairs(
+    trfs: Vec<Similarity3>,
+    model: Rc<Model>,
+    start_open: Vec<(usize, usize)>,
+) -> (Vec<RoomKey>, Vec<Textured>) {
+    let mut keys = vec![];
+    let mut textures = vec![];
+
+    for (trf, (start, open)) in trfs.iter().zip(start_open.iter()) {
+        let (k, t) = gen_key_pair(*trf, &model, *start, *open);
+        keys.push(k);
+        textures.push(t);
+    }
+
+    (keys, textures)
 }
 
 pub struct Map {
@@ -155,11 +189,10 @@ impl Map {
         );
     }
 
-    pub fn add_key(&mut self, starts_roomid: usize, opens_roomid: usize, sprite_index: usize) {
+    pub fn add_key(&mut self, starts_roomid: usize, opens_roomid: usize) {
         let key = RoomKey {
             starts_roomid,
             opens_roomid,
-            sprite_index,
             picked_up: false,
         };
 
@@ -336,7 +369,7 @@ fn main() -> Result<()> {
     let flat_model = engine.load_flat(std::path::Path::new("content/windmill.glb"))?;
 
     let mut map = Map::new(0, 5);
-    map.add_key(0, 1, 0);
+    map.add_key(0, 1);
     let file = File::open("content/world.json").unwrap();
     let json: serde_json::Value = serde_json::from_reader(file).unwrap();
     let rooms = json.get("rooms").unwrap();
