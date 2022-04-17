@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use frenderer::animation::{AnimationSettings, AnimationState};
-use frenderer::assets::AnimRef;
+use frenderer::assets::{AnimRef, Texture};
 use frenderer::camera::{Camera, FPCamera};
 use frenderer::types::*;
 use frenderer::{Engine, Key, Result, WindowSettings};
@@ -32,27 +32,35 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn grab(&mut self, sprites: &mut Vec<Sprite>) {
+    pub fn grab(&mut self, textureds: &mut Vec<Textured>) {
         //checks if keys are nearby and grabs them
 
+        // textureds.remove(1);
+
+        dbg!(textureds[1].trf.translation);
+
         let curr_pos = self.object.trf.translation;
+        dbg!(curr_pos);
 
         //two steps: filter out the ones that match first, then actually pick them up
 
         let keys = self.map.room_keys.get_mut(&self.current_room).unwrap();
 
-        if let Some(pos) = sprites.iter().position(|s| {
+        //skip the first one
+        let mut tex_iter = textureds.iter();
+        // tex_iter.next();
+
+        if let Some(pos) = tex_iter.position(|s| {
             let sprite_pos = s.trf.translation;
             distance(curr_pos, sprite_pos) < GRAB_THRESHOLD
         }) {
             println!("attempting to grab something");
             let key = keys.swap_remove(pos);
-            sprites.remove(pos);
+            dbg!(textureds.remove(pos + 1));
             dbg!(&key);
 
             key.pick_up(self);
         }
-        dbg!(&sprites);
     }
 
     pub fn change_room(&mut self, new_roomid: usize) {
@@ -201,13 +209,21 @@ pub struct World {
     flats: Vec<Flat>,
     textured: Vec<Textured>,
 }
-struct Flat {
+pub struct Flat {
     trf: Similarity3,
     model: Rc<frenderer::renderer::flat::Model>,
 }
-struct Textured {
+pub struct Textured {
     trf: Similarity3,
     model: Rc<frenderer::renderer::textured::Model>,
+}
+
+impl fmt::Debug for Textured {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Textured")
+            .field("pos", &self.trf.translation)
+            .finish()
+    }
 }
 
 impl frenderer::World for World {
@@ -232,7 +248,7 @@ impl frenderer::World for World {
         let grab = input.is_key_released(Key::Space);
 
         if grab {
-            self.player.grab(&mut self.sprites);
+            self.player.grab(&mut self.textured);
         }
 
         let s = &mut self.player.object;
@@ -245,17 +261,17 @@ impl frenderer::World for World {
         );
         self.fp_camera.update_camera(&mut self.camera);
 
-        for s in self.sprites.iter_mut() {
+        for _s in self.sprites.iter_mut() {
             //s.trf.append_rotation(rot);
             //s.size.x += dscale;
             //s.size.y += dscale;
         }
 
-        for m in self.flats.iter_mut() {
+        for _m in self.flats.iter_mut() {
             //m.trf.append_rotation(rot);
             //m.trf.scale += dscale;
         }
-        for m in self.textured.iter_mut() {
+        for _m in self.textured.iter_mut() {
             //m.trf.append_rotation(rot);
             //sm.trf.scale += dscale;
         }
@@ -303,7 +319,6 @@ fn main() -> Result<()> {
     let floor_tex = engine.load_texture(std::path::Path::new("content/cube-diffuse.jpg"))?;
     let floor_meshes = engine.load_textured(std::path::Path::new("content/floor.obj"))?;
     let floor = engine.create_textured_model(floor_meshes, vec![floor_tex]);
-    let king = engine.load_texture(std::path::Path::new("content/king.png"))?;
     let half_wall_model = engine.load_flat(std::path::Path::new("content/wallHalf.glb"))?;
     let tex = engine.load_texture(std::path::Path::new("content/robot.png"))?;
     let meshes = engine.load_skinned(
@@ -374,19 +389,19 @@ fn main() -> Result<()> {
         state: AnimationState { t: 0.0 },
     };
 
-    let key_sprite = Sprite {
-        trf: Isometry3::new(Vec3::new(20.0, 5.0, -10.0), Rotor3::identity()),
-        size: Vec2::new(16.0, 16.0),
-        cel: Rect::new(0.5, 0.5, 0.5, 0.5),
-        tex: king,
-    };
+    // let key_sprite = Sprite {
+    //     trf: Isometry3::new(Vec3::new(20.0, 5.0, -10.0), Rotor3::identity()),
+    //     size: Vec2::new(16.0, 16.0),
+    //     cel: Rect::new(0.5, 0.5, 0.5, 0.5),
+    //     tex: king,
+    // };
 
-    let key_str = RoomKey {
-        starts_roomid: 0,
-        opens_roomid: 1,
-        sprite_index: 0,
-        picked_up: false,
-    };
+    // let key_str = RoomKey {
+    //     starts_roomid: 0,
+    //     opens_roomid: 1,
+    //     sprite_index: 0,
+    //     picked_up: false,
+    // };
 
     let world = World {
         camera,
@@ -398,21 +413,23 @@ fn main() -> Result<()> {
             current_room: map.start_room_id,
             map,
         },
-        sprites: vec![key_sprite],
+        sprites: vec![],
         flats: flats_vec,
         textured: vec![
-            Textured {
-                trf: Similarity3::new(Vec3::new(0.0, 0.0, -10.0), Rotor3::identity(), 5.0),
-                model: marble,
-            },
             Textured {
                 trf: Similarity3::new(Vec3::new(0.0, -25.0, 0.0), Rotor3::identity(), 10.0),
                 model: floor,
             },
+            Textured {
+                trf: Similarity3::new(Vec3::new(0.0, 0.0, -10.0), Rotor3::identity(), 5.0),
+                model: Rc::clone(&marble),
+            },
+            Textured {
+                trf: Similarity3::new(Vec3::new(10.0, 0.0, -10.0), Rotor3::identity(), 5.0),
+                model: Rc::clone(&marble),
+            },
         ],
     };
 
-    dbg!(&world.sprites[0]);
-    dbg!(&world.player);
     engine.play(world)
 }
