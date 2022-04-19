@@ -5,9 +5,9 @@ use frenderer::assets::AnimRef;
 use frenderer::camera::{Camera, FPCamera};
 use frenderer::types::*;
 use frenderer::{Engine, Key, Result, WindowSettings};
-use std::rc::Rc;
 use std::collections::HashMap;
 use std::fs::File;
+use std::rc::Rc;
 
 const DT: f64 = 1.0 / 60.0;
 
@@ -25,35 +25,31 @@ impl GameObject {
 
 pub struct Room {
     id: usize,
-    flats: [usize; 4], // indices of walls of the room.
+    flats: [usize; 4],           // indices of walls of the room.
     connected_rooms: [usize; 4], //point by ID and N,E,S,W, -1 for no room
 }
 impl Room {
-
     pub fn get_flats(&self) -> &[usize] {
-        & self.flats
+        &self.flats
     }
-
 }
 
 pub struct RoomKey {
     starts_roomid: usize, // the room that the key is in.
-    opens_roomid: usize, // the room they open to
-    sprite_index: usize, // corresponds to the index in the world sprites
+    opens_roomid: usize,  // the room they open to
+    sprite_index: usize,  // corresponds to the index in the world sprites
     picked_up: bool,
 }
 impl RoomKey {
-
-    pub fn get_sprite_index(& self) -> & usize{
-       & self.sprite_index
+    pub fn get_sprite_index(&self) -> &usize {
+        &self.sprite_index
     }
 
-    pub fn pick_up(mut self, game_state: &mut GameState){
+    pub fn pick_up(mut self, game_state: &mut GameState) {
         self.picked_up = true;
         game_state.keys_grabbed.push(self);
         //TODO: make it disappear   en
     }
-
 }
 
 pub struct Map {
@@ -63,33 +59,32 @@ pub struct Map {
     end_room_id: usize,
 }
 impl Map {
-
-    pub fn new(start_room_id: usize, end_room_id: usize ) -> Self {
+    pub fn new(start_room_id: usize, end_room_id: usize) -> Self {
         Self {
             start_room_id,
             rooms_list: HashMap::new(),
             room_keys: vec![],
-            end_room_id
+            end_room_id,
         }
     }
-    pub fn add_room(&mut self, id: usize, flats: [usize; 4], connected_rooms: [usize;4]) {
-        self.rooms_list.insert(id,Room {
-            id: id,
-            flats: flats,
-            connected_rooms: connected_rooms,
-        } );
-        
+    pub fn add_room(&mut self, id: usize, flats: [usize; 4], connected_rooms: [usize; 4]) {
+        self.rooms_list.insert(
+            id,
+            Room {
+                id: id,
+                flats: flats,
+                connected_rooms: connected_rooms,
+            },
+        );
     }
 
-    pub fn get_rooms_list(&mut self) -> &HashMap<usize, Room>  {
+    pub fn get_rooms_list(&mut self) -> &HashMap<usize, Room> {
         &self.rooms_list
     }
-
 }
-pub struct GameState{
+pub struct GameState {
     keys_grabbed: Vec<RoomKey>,
 }
-
 
 struct Sprite {
     trf: Isometry3,
@@ -133,11 +128,14 @@ impl frenderer::World for World {
 
         let move_z = input.key_axis(Key::Down, Key::Up) as f32;
         let move_x = input.key_axis(Key::Right, Key::Left) as f32;
-        
         let s = &mut self.player;
         s.trf.append_translation(Vec3::new(move_x, 0., move_z));
-        
-        self.fp_camera.update(&input, self.player.trf.translation,self.player.trf.rotation);
+
+        self.fp_camera.update(
+            &input,
+            self.player.trf.translation,
+            self.player.trf.rotation,
+        );
         self.fp_camera.update_camera(&mut self.camera);
 
         for s in self.sprites.iter_mut() {
@@ -157,8 +155,6 @@ impl frenderer::World for World {
 
         //let camera_drot = input.key_axis(Key::Left, Key::Right) * PI / 4.0 * DT as f32;
         //self.camera.transform.prepend_rotation(Rotor3::from_rotation_xz(camera_drot));
-
-
     }
     fn render(
         &mut self,
@@ -201,7 +197,14 @@ fn main() -> Result<()> {
     let floor_meshes = engine.load_textured(std::path::Path::new("content/floor.obj"))?;
     let floor = engine.create_textured_model(floor_meshes, vec![floor_tex]);
     let king = engine.load_texture(std::path::Path::new("content/king.png"))?;
-    let half_wall_model = engine.load_flat(std::path::Path::new("content/wallHalf.glb"))?;
+    let wall_with_door_closed_model = engine.load_flat(std::path::Path::new(
+        "content/walls/wall_with_door_closed.glb",
+    ))?;
+    let wall_with_door_opened_model = engine.load_flat(std::path::Path::new(
+        "content/walls/wall_with_door_opened.glb",
+    ))?;
+    let wall_no_door_model =
+        engine.load_flat(std::path::Path::new("content/walls/wall_no_door.glb"))?;
     let tex = engine.load_texture(std::path::Path::new("content/robot.png"))?;
     let meshes = engine.load_skinned(
         std::path::Path::new("content/characterSmall.fbx"),
@@ -215,15 +218,14 @@ fn main() -> Result<()> {
     )?;
     assert_eq!(meshes.len(), 1);
     let model = engine.create_skinned_model(meshes, vec![tex]);
-    let flat_model = engine.load_flat(std::path::Path::new("content/windmill.glb"))?;
 
-    let mut map = Map::new(0,5);
-    let file = File::open("content/world.json").unwrap();
+    let mut map = Map::new(0, 5);
+    let file = File::open("content/world-2.json").unwrap();
     let json: serde_json::Value = serde_json::from_reader(file).unwrap();
     let rooms = json.get("rooms").unwrap();
 
-    for room in rooms.as_array().unwrap().iter(){
-        let room_id= room["id"].as_i64().unwrap() as usize;
+    for room in rooms.as_array().unwrap().iter() {
+        let room_id = room["id"].as_i64().unwrap() as usize;
         let flats = room["flats"].as_array().unwrap();
         let flats_arr: [usize; 4] = [
             flats[0].as_i64().unwrap() as usize,
@@ -233,19 +235,19 @@ fn main() -> Result<()> {
         ];
         let connected_rooms = room["connected_rooms"].as_array().unwrap();
         let connected_rooms_arr: [usize; 4] = [
-                                                connected_rooms[0].as_i64().unwrap() as usize,
-                                                connected_rooms[1].as_i64().unwrap() as usize,
-                                                connected_rooms[2].as_i64().unwrap() as usize,
-                                                connected_rooms[3].as_i64().unwrap() as usize,
-                                            ];
+            connected_rooms[0].as_i64().unwrap() as usize,
+            connected_rooms[1].as_i64().unwrap() as usize,
+            connected_rooms[2].as_i64().unwrap() as usize,
+            connected_rooms[3].as_i64().unwrap() as usize,
+        ];
 
         map.add_room(room_id, flats_arr, connected_rooms_arr);
     }
 
     let mut flats_vec: Vec<Flat> = vec![];
     let flats = json.get("flats").unwrap();
-    for flat in flats.as_array().unwrap().iter(){
-        let mut rot= Rotor3::identity();
+    for flat in flats.as_array().unwrap().iter() {
+        let mut rot = Rotor3::identity();
 
         if !(flat["is_identity"].as_bool().unwrap()) {
             rot = Rotor3::from_rotation_xz(1.57079)
@@ -254,16 +256,42 @@ fn main() -> Result<()> {
         let x = flat["x"].as_f64().unwrap() as f32;
         let y = -15.0;
         let z = flat["z"].as_f64().unwrap() as f32;
-        
+        let model = {
+            if flat["door"].as_i64().unwrap() as i32 == 0 {
+                // Wall model without a door
+                wall_no_door_model.clone()
+            } else if flat["door"].as_i64().unwrap() as i32 == 1 {
+                // Wall model with an open door
+                wall_with_door_opened_model.clone()
+            } else if flat["door"].as_i64().unwrap() as i32 == 2 {
+                // Wall model with a locked door
+                wall_with_door_closed_model.clone()
+            } else {
+                panic!("Invalid value for specification of wall.")
+            }
+        };
         let new_flat = Flat {
-            trf:  Similarity3::new(Vec3::new(x,y,z), rot, 100.),
-            model: half_wall_model.clone()
+            trf: Similarity3::new(Vec3::new(x, y, z), rot, 100.),
+            model: model.clone(),
         };
         flats_vec.push(new_flat);
-    
     }
+    // For testing purposes
 
-
+    // let new_flat = Flat {
+    //     trf: Similarity3::new(Vec3::new(0.0, -15.0, 0.0), Rotor3::identity(), 100.),
+    //     model: wall_with_door_opened_model.clone(),
+    // };
+    // flats_vec.push(new_flat);
+    // let new_flat_2 = Flat {
+    //     trf: Similarity3::new(
+    //         Vec3::new(100.0, -15.0, 192.0),
+    //         Rotor3::from_rotation_xz(1.57079),
+    //         100.,
+    //     ),
+    //     model: wall_no_door_model.clone(),
+    // };
+    // flats_vec.push(new_flat_2);
 
     let world = World {
         camera,
@@ -292,7 +320,7 @@ fn main() -> Result<()> {
                 model: floor,
             },
         ],
-        map
+        map,
     };
     engine.play(world)
 }
