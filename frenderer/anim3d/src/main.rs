@@ -37,9 +37,6 @@ impl Player {
     pub fn grab(&mut self, textureds: &mut Vec<Textured>) {
         //checks if keys are nearby and grabs them
 
-        // dbg!(textureds.remove(0));
-        // dbg!(textureds);
-
         let curr_pos = self.object.trf.translation;
         dbg!(curr_pos);
 
@@ -47,9 +44,7 @@ impl Player {
 
         let keys = self.map.room_keys.get_mut(&self.current_room).unwrap();
 
-        //skip the first one (it's the floor)
         let mut tex_iter = textureds.iter();
-        // tex_iter.next();
 
         if let Some(pos) = tex_iter.position(|t| {
             let textured_pos = t.trf.translation;
