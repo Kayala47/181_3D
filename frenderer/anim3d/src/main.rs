@@ -6,7 +6,6 @@ use frenderer::camera::{Camera, FPCamera};
 use frenderer::renderer::textured::Model;
 use frenderer::types::*;
 use frenderer::{Engine, Key, Result, WindowSettings};
-use std::any::type_name;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
@@ -112,6 +111,7 @@ pub struct RoomKey {
 }
 impl RoomKey {
     pub fn pick_up(mut self, game_state: &mut Player) {
+
         self.picked_up = true;
         game_state.keys_grabbed.push(self);
         //TODO: make it disappear   en
@@ -167,6 +167,7 @@ fn multiple_key_pairs(
     }
 
     (keys, textures)
+
 }
 
 pub struct Map {
@@ -181,6 +182,7 @@ impl Map {
             start_room_id,
             rooms_list: HashMap::new(),
             room_keys: HashMap::new(),
+
             end_room_id,
         }
     }
@@ -194,6 +196,7 @@ impl Map {
             },
         );
     }
+
 
     pub fn add_key(&mut self, starts_roomid: usize, opens_roomid: usize) {
         let key = RoomKey {
@@ -221,16 +224,19 @@ impl Map {
     pub fn get_rooms_list(&mut self) -> &HashMap<usize, Room> {
         &self.rooms_list
     }
+
 }
 pub struct GameState {
     keys_grabbed: Vec<RoomKey>,
 }
 
+
 fn distance(v1: Vec3, v2: Vec3) -> f32 {
     (v1 - v2).mag()
 }
 
-pub struct Sprite {
+
+struct Sprite {
     trf: Isometry3,
     tex: frenderer::assets::TextureRef,
     cel: Rect,
@@ -286,6 +292,7 @@ impl frenderer::World for World {
             obj.tick_animation();
         }
 
+
         // let move_z = input.key_axis(Key::Down, Key::Up) as f32;
         // let move_x = input.key_axis(Key::LEFT, Key::RIGHT) as f32;
         let move_z = input.key_axis(Key::S, Key::W) as f32;
@@ -297,12 +304,14 @@ impl frenderer::World for World {
         }
 
         let s = &mut self.player.object;
+
         s.trf.append_translation(Vec3::new(move_x, 0., move_z));
 
         self.fp_camera.update(
             &input,
             self.player.object.trf.translation,
             self.player.object.trf.rotation,
+
         );
         self.fp_camera.update_camera(&mut self.camera);
 
@@ -364,7 +373,17 @@ fn main() -> Result<()> {
     let floor_tex = engine.load_texture(std::path::Path::new("content/cube-diffuse.jpg"))?;
     let floor_meshes = engine.load_textured(std::path::Path::new("content/floor.obj"))?;
     let floor = engine.create_textured_model(floor_meshes, vec![floor_tex]);
-    let half_wall_model = engine.load_flat(std::path::Path::new("content/wallHalf.glb"))?;
+
+    
+    let wall_with_door_closed_model = engine.load_flat(std::path::Path::new(
+        "content/walls/wall_with_door_closed.glb",
+    ))?;
+    let wall_with_door_opened_model = engine.load_flat(std::path::Path::new(
+        "content/walls/wall_with_door_opened.glb",
+    ))?;
+    let wall_no_door_model =
+        engine.load_flat(std::path::Path::new("content/walls/wall_no_door.glb"))?;
+
     let tex = engine.load_texture(std::path::Path::new("content/robot.png"))?;
     let meshes = engine.load_skinned(
         std::path::Path::new("content/characterSmall.fbx"),
@@ -378,10 +397,12 @@ fn main() -> Result<()> {
     )?;
     assert_eq!(meshes.len(), 1);
     let model = engine.create_skinned_model(meshes, vec![tex]);
-    let flat_model = engine.load_flat(std::path::Path::new("content/windmill.glb"))?;
 
     let mut map = Map::new(0, 5);
-    let file = File::open("content/world.json").unwrap();
+    //let file = File::open("content/world.json").unwrap();
+
+    let file = File::open("content/world-2.json").unwrap();
+
     let json: serde_json::Value = serde_json::from_reader(file).unwrap();
     let rooms = json.get("rooms").unwrap();
 
@@ -409,6 +430,7 @@ fn main() -> Result<()> {
     let flats = json.get("flats").unwrap();
     for flat in flats.as_array().unwrap().iter() {
         let mut rot = Rotor3::identity();
+
         //1.57079 Rust was complaining about this value. now is std::f32::consts::FRAC_PI_2
 
         if !(flat["is_identity"].as_bool().unwrap()) {
@@ -418,10 +440,24 @@ fn main() -> Result<()> {
         let x = flat["x"].as_f64().unwrap() as f32;
         let y = -15.0;
         let z = flat["z"].as_f64().unwrap() as f32;
-
+  
+      let model = {
+            if flat["door"].as_i64().unwrap() as i32 == 0 {
+                // Wall model without a door
+                wall_no_door_model.clone()
+            } else if flat["door"].as_i64().unwrap() as i32 == 1 {
+                // Wall model with an open door
+                wall_with_door_opened_model.clone()
+            } else if flat["door"].as_i64().unwrap() as i32 == 2 {
+                // Wall model with a locked door
+                wall_with_door_closed_model.clone()
+            } else {
+                panic!("Invalid value for specification of wall.")
+            }
+        };
         let new_flat = Flat {
             trf: Similarity3::new(Vec3::new(x, y, z), rot, 100.),
-            model: half_wall_model.clone(),
+            model: model.clone(),
         };
         flats_vec.push(new_flat);
     }
@@ -457,6 +493,25 @@ fn main() -> Result<()> {
         trf: Similarity3::new(Vec3::new(0.0, -25.0, 0.0), Rotor3::identity(), 10.0),
         model: floor,
     }]);
+        
+    
+    // For testing purposes
+
+    // let new_flat = Flat {
+    //     trf: Similarity3::new(Vec3::new(0.0, -15.0, 0.0), Rotor3::identity(), 100.),
+    //     model: wall_with_door_opened_model.clone(),
+    // };
+    // flats_vec.push(new_flat);
+    // let new_flat_2 = Flat {
+    //     trf: Similarity3::new(
+    //         Vec3::new(100.0, -15.0, 192.0),
+    //         Rotor3::from_rotation_xz(1.57079),
+    //         100.,
+    //     ),
+    //     model: wall_no_door_model.clone(),
+    // };
+    // flats_vec.push(new_flat_2);
+
 
     let world = World {
         camera,
@@ -471,6 +526,7 @@ fn main() -> Result<()> {
         sprites: vec![],
         flats: flats_vec,
         textured: all_textureds,
+
     };
 
     engine.play(world)
