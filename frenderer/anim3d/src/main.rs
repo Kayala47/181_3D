@@ -6,6 +6,7 @@ use frenderer::camera::{Camera, FPCamera};
 use frenderer::renderer::textured::Model;
 use frenderer::types::*;
 use frenderer::{Engine, Key, Result, WindowSettings};
+use std::any::type_name;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
@@ -36,6 +37,9 @@ impl Player {
     pub fn grab(&mut self, textureds: &mut Vec<Textured>) {
         //checks if keys are nearby and grabs them
 
+        // dbg!(textureds.remove(0));
+        // dbg!(textureds);
+
         let curr_pos = self.object.trf.translation;
         dbg!(curr_pos);
 
@@ -45,21 +49,22 @@ impl Player {
 
         //skip the first one (it's the floor)
         let mut tex_iter = textureds.iter();
-        tex_iter.next();
+        // tex_iter.next();
 
         if let Some(pos) = tex_iter.position(|t| {
             let textured_pos = t.trf.translation;
             distance(curr_pos, textured_pos) < GRAB_THRESHOLD
         }) {
             println!("attempting to grab something");
-            dbg!(&pos);
-            dbg!(&keys);
-            let key = keys.remove(pos);
-            dbg!(&key);
 
-            key.pick_up(self);
+            if pos < keys.len() && pos < textureds.len() - 1 {
+                let key = keys.remove(pos);
+                key.pick_up(self);
 
-            dbg!(textureds.remove(pos + 1));
+                textureds.remove(pos);
+            } else {
+                println!("not enough elements!");
+            }
         }
 
         dbg!(&self.map.room_keys.get(&self.current_room).unwrap());
@@ -440,16 +445,23 @@ fn main() -> Result<()> {
     ];
 
     let (keys, mut key_textureds) =
-        multiple_key_pairs(key_positions, marble, vec![(0, 1), (0, 2), (0, 3), (0, 4)]);
+        multiple_key_pairs(key_positions, marble, vec![(0, 1), (0, 2), (0, 3)]);
 
     map.add_mult_keys(keys);
 
+    let mut all_textureds = vec![];
+
     //start w just the floor and then add keys
-    let mut all_textureds = vec![Textured {
+    // let mut all_textureds = vec![Textured {
+    //     trf: Similarity3::new(Vec3::new(0.0, -25.0, 0.0), Rotor3::identity(), 10.0),
+    //     model: floor,
+    // }];
+    // let mut all_textureds = vec![];
+    all_textureds.append(&mut key_textureds);
+    all_textureds.append(&mut vec![Textured {
         trf: Similarity3::new(Vec3::new(0.0, -25.0, 0.0), Rotor3::identity(), 10.0),
         model: floor,
-    }];
-    all_textureds.append(&mut key_textureds);
+    }]);
 
     let world = World {
         camera,
