@@ -111,7 +111,6 @@ pub struct RoomKey {
 }
 impl RoomKey {
     pub fn pick_up(mut self, game_state: &mut Player) {
-
         self.picked_up = true;
         game_state.keys_grabbed.push(self);
         //TODO: make it disappear   en
@@ -167,7 +166,6 @@ fn multiple_key_pairs(
     }
 
     (keys, textures)
-
 }
 
 pub struct Map {
@@ -197,7 +195,6 @@ impl Map {
         );
     }
 
-
     pub fn add_key(&mut self, starts_roomid: usize, opens_roomid: usize) {
         let key = RoomKey {
             starts_roomid,
@@ -224,19 +221,16 @@ impl Map {
     pub fn get_rooms_list(&mut self) -> &HashMap<usize, Room> {
         &self.rooms_list
     }
-
 }
 pub struct GameState {
     keys_grabbed: Vec<RoomKey>,
 }
 
-
 fn distance(v1: Vec3, v2: Vec3) -> f32 {
     (v1 - v2).mag()
 }
 
-
-struct Sprite {
+pub struct Sprite {
     trf: Isometry3,
     tex: frenderer::assets::TextureRef,
     cel: Rect,
@@ -292,7 +286,6 @@ impl frenderer::World for World {
             obj.tick_animation();
         }
 
-
         // let move_z = input.key_axis(Key::Down, Key::Up) as f32;
         // let move_x = input.key_axis(Key::LEFT, Key::RIGHT) as f32;
         let move_z = input.key_axis(Key::S, Key::W) as f32;
@@ -311,7 +304,6 @@ impl frenderer::World for World {
             &input,
             self.player.object.trf.translation,
             self.player.object.trf.rotation,
-
         );
         self.fp_camera.update_camera(&mut self.camera);
 
@@ -374,7 +366,6 @@ fn main() -> Result<()> {
     let floor_meshes = engine.load_textured(std::path::Path::new("content/floor.obj"))?;
     let floor = engine.create_textured_model(floor_meshes, vec![floor_tex]);
 
-    
     let wall_with_door_closed_model = engine.load_flat(std::path::Path::new(
         "content/walls/wall_with_door_closed.glb",
     ))?;
@@ -440,8 +431,8 @@ fn main() -> Result<()> {
         let x = flat["x"].as_f64().unwrap() as f32;
         let y = -15.0;
         let z = flat["z"].as_f64().unwrap() as f32;
-  
-      let model = {
+
+        let model = {
             if flat["door"].as_i64().unwrap() as i32 == 0 {
                 // Wall model without a door
                 wall_no_door_model.clone()
@@ -493,8 +484,7 @@ fn main() -> Result<()> {
         trf: Similarity3::new(Vec3::new(0.0, -25.0, 0.0), Rotor3::identity(), 10.0),
         model: floor,
     }]);
-        
-    
+
     // For testing purposes
 
     // let new_flat = Flat {
@@ -512,7 +502,6 @@ fn main() -> Result<()> {
     // };
     // flats_vec.push(new_flat_2);
 
-
     let world = World {
         camera,
         fp_camera,
@@ -526,7 +515,6 @@ fn main() -> Result<()> {
         sprites: vec![],
         flats: flats_vec,
         textured: all_textureds,
-
     };
 
     engine.play(world)
