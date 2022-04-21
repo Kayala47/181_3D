@@ -53,8 +53,8 @@ impl FPCamera {
         }
     }
     pub fn update(&mut self, input: &Input, player_pos: Vec3, player_rot: Rotor3) {
-        let MousePos { y: dy, .. } = input.mouse_delta();
-        self.pitch += DT as f32 * dy as f32 / 10.0;
+        //let MousePos { y: dy, .. } = input.mouse_delta();
+        // self.pitch += DT as f32 * dy as f32 / 10.0;
         // Make sure pitch isn't directly up or down (that would put
         // `eye` and `at` at the same z, which is Bad)
         self.pitch = self.pitch.clamp(-PI / 2.0 + 0.001, PI / 2.0 - 0.001);
