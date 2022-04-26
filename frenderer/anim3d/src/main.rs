@@ -5,7 +5,7 @@ use frenderer::assets::{AnimRef, Texture};
 use frenderer::camera::{Camera, FPCamera};
 use frenderer::renderer::textured::Model;
 use frenderer::types::*;
-use frenderer::{Engine, Key, Result, WindowSettings, MousePos};
+use frenderer::{Engine, Key, MousePos, Result, WindowSettings};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
@@ -24,6 +24,31 @@ const WALL_Z: f32 = 0.5 * 100.0;
 const DOOR_X: f32 = 0.1 * 100.0;
 const DOOR_Y: f32 = 0.33 * 100.0;
 const DOOR_Z: f32 = 0.25 * 100.0;
+
+struct Plane {
+    // A normal, has to be a unit vector
+    n: Vec3,
+    // And a distance of how far along the normal this is
+    d: f32,
+}
+
+struct Wall {
+    trf: Similarity3,
+    model: Rc<Flat>,
+}
+
+impl Wall {
+    fn shape(&self) -> Plane {
+        Plane {
+            n: self.trf.rotation * Vec3::unit_y(),
+            d: self.trf.translation.y + self.trf.scale,
+        }
+    }
+
+    fn get_model(&self) -> &Flat {
+        &self.model
+    }
+}
 
 pub struct Player {
     object: GameObject,
@@ -303,14 +328,12 @@ impl frenderer::World for World {
 
         player.trf.prepend_rotation(rot);
 
-        player.trf.prepend_translation(Vec3::new(move_x * 100.0, 0., move_z * 100.0));
+        player
+            .trf
+            .prepend_translation(Vec3::new(move_x * 100.0, 0., move_z * 100.0));
 
-
-        self.fp_camera.update(
-            &input,
-            player.trf.translation,
-            player.trf.rotation,
-        );
+        self.fp_camera
+            .update(&input, player.trf.translation, player.trf.rotation);
         self.fp_camera.update_camera(&mut self.camera);
 
         for _s in self.sprites.iter_mut() {
