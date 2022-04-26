@@ -5,7 +5,7 @@ use frenderer::assets::{AnimRef, Texture};
 use frenderer::camera::{Camera, FPCamera};
 use frenderer::renderer::textured::Model;
 use frenderer::types::*;
-use frenderer::{Engine, Key, Result, WindowSettings};
+use frenderer::{Engine, Key, Result, WindowSettings, MousePos};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
@@ -296,14 +296,20 @@ impl frenderer::World for World {
             self.player.grab(&mut self.textured);
         }
 
-        let s = &mut self.player.object;
+        let player = &mut self.player.object;
 
-        s.trf.append_translation(Vec3::new(move_x, 0., move_z));
+        let MousePos { x: dx, .. } = input.mouse_delta();
+        let rot = Rotor3::from_rotation_xz(dx as f32 * (PI / 4.0) * DT as f32);
+
+        player.trf.prepend_rotation(rot);
+
+        player.trf.prepend_translation(Vec3::new(move_x * 100.0, 0., move_z * 100.0));
+
 
         self.fp_camera.update(
             &input,
-            self.player.object.trf.translation,
-            self.player.object.trf.rotation,
+            player.trf.translation,
+            player.trf.rotation,
         );
         self.fp_camera.update_camera(&mut self.camera);
 
