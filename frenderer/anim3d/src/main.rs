@@ -6,6 +6,13 @@ use frenderer::camera::{Camera, FPCamera};
 use frenderer::renderer::textured::Model;
 use frenderer::types::*;
 use frenderer::{Engine, Key, Result, WindowSettings, MousePos};
+use kira::{
+	manager::{AudioManager, AudioManagerSettings},
+    sound::{SoundSettings,},
+    arrangement::{LoopArrangementSettings, Arrangement},
+    instance::{InstanceSettings},
+    Tempo,
+};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
@@ -521,6 +528,18 @@ fn main() -> Result<()> {
         flats: flats_vec,
         textured: all_textureds,
     };
+
+    // load and play background music
+    let mut audio_manager = AudioManager::new(AudioManagerSettings::default()).unwrap();
+    let sound_handle = audio_manager.load_sound(
+            "content/background.mp3",
+            SoundSettings::new().semantic_duration(Tempo(128.0).beats_to_seconds(8.0)),
+    ).unwrap();
+    let mut arrangement_handle = audio_manager.add_arrangement(Arrangement::new_loop(
+            &sound_handle,
+            LoopArrangementSettings::default(),
+    )).unwrap();
+    arrangement_handle.play(InstanceSettings::default()).unwrap();
 
     engine.play(world)
 }
