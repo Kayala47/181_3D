@@ -488,7 +488,7 @@ fn main() -> Result<()> {
     // let mut all_textureds = vec![];
     all_textureds.append(&mut key_textureds);
     all_textureds.append(&mut vec![Textured {
-        trf: Similarity3::new(Vec3::new(0.0, -25.0, 0.0), Rotor3::identity(), 10.0),
+        trf: Similarity3::new(Vec3::new(0.0, -32.0, 0.0), Rotor3::identity(), 15.0),
         model: floor,
     }]);
     // For testing purposes
