@@ -11,6 +11,15 @@ use std::fmt;
 use std::fs::File;
 use std::rc::Rc;
 
+/*
+TODO: 2 questions
+- How to calculate a door from inside a wall? Ie, make a Similarity3 object from the middle portion
+of a wall Similarity3
+- How to do the prepend without actually applying it? Ie, get a Vec3 position without applying it to
+the player
+
+*/
+
 const DT: f64 = 1.0 / 60.0;
 
 const GRAB_THRESHOLD: f32 = 100.0;
@@ -33,10 +42,14 @@ struct Plane {
     d: f32,
 }
 
+struct Door_Collision {
+    trf: Similarity3,
+}
+
 struct Wall {
     trf: Similarity3,
-    wall: Rc<Flat>,
-    door: Option<Rc<Flat>>,
+    wall: Flat,
+    door: Option<Rc<Door_Collision>>,
 }
 
 impl Wall {
@@ -47,7 +60,7 @@ impl Wall {
         }
     }
 
-    fn get_models(&self) -> (&Flat, &Option<Rc<Flat>>) {
+    fn get_model(&self) -> (&Flat, &Option<Rc<Door_Collision>>) {
         (&self.wall, &self.door)
     }
 
@@ -165,7 +178,6 @@ impl RoomKey {
     pub fn pick_up(mut self, game_state: &mut Player) {
         self.picked_up = true;
         game_state.keys_grabbed.push(self);
-        //TODO: make it disappear   en
     }
 }
 
@@ -306,6 +318,8 @@ pub struct World {
     flats: Vec<Flat>,
     textured: Vec<Textured>,
 }
+
+#[derive(Clone)]
 pub struct Flat {
     trf: Similarity3,
     model: Rc<frenderer::renderer::flat::Model>,
@@ -355,6 +369,7 @@ impl frenderer::World for World {
 
         player.trf.prepend_rotation(rot);
 
+        //TODO: make sure it doesn't actually move if would cause collision
         player
             .trf
             .prepend_translation(Vec3::new(move_x * 100.0, 0., move_z * 100.0));
@@ -425,11 +440,16 @@ fn main() -> Result<()> {
     let wall_with_door_closed_model = engine.load_flat(std::path::Path::new(
         "content/walls/wall_with_door_closed.glb",
     ))?;
+
+    let door_coll = None;
+
     let wall_with_door_opened_model = engine.load_flat(std::path::Path::new(
         "content/walls/wall_with_door_opened.glb",
     ))?;
     let wall_no_door_model =
         engine.load_flat(std::path::Path::new("content/walls/wall_no_door.glb"))?;
+
+    let no_door_coll = None;
 
     let tex = engine.load_texture(std::path::Path::new("content/robot.png"))?;
     let meshes = engine.load_skinned(
@@ -474,6 +494,7 @@ fn main() -> Result<()> {
     }
 
     let mut flats_vec: Vec<Flat> = vec![];
+    let mut walls_vec: Vec<Wall> = vec![];
     let flats = json.get("flats").unwrap();
     for flat in flats.as_array().unwrap().iter() {
         let mut rot = Rotor3::identity();
@@ -488,6 +509,8 @@ fn main() -> Result<()> {
         let y = -15.0;
         let z = flat["z"].as_f64().unwrap() as f32;
 
+        let mut no_door_coll_necessary = true;
+
         let model = {
             if flat["door"].as_i64().unwrap() as i32 == 0 {
                 // Wall model without a door
@@ -497,16 +520,31 @@ fn main() -> Result<()> {
                 wall_with_door_opened_model.clone()
             } else if flat["door"].as_i64().unwrap() as i32 == 2 {
                 // Wall model with a locked door
+                no_door_coll_necessary = false;
                 wall_with_door_closed_model.clone()
             } else {
                 panic!("Invalid value for specification of wall.")
             }
         };
+        let trf = Similarity3::new(Vec3::new(x, y, z), rot, 100.);
         let new_flat = Flat {
-            trf: Similarity3::new(Vec3::new(x, y, z), rot, 100.),
+            trf,
             model: model.clone(),
         };
+
+        let collision_obj = if no_door_coll_necessary {
+            no_door_coll.clone()
+        } else {
+            door_coll.clone()
+        };
+
+        let new_wall = Wall {
+            trf,
+            wall: new_flat.clone(),
+            door: collision_obj,
+        };
         flats_vec.push(new_flat);
+        walls_vec.push(new_wall);
     }
 
     let player_obj = GameObject {
