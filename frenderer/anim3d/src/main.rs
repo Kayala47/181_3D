@@ -5,7 +5,7 @@ use frenderer::assets::{AnimRef, Texture};
 use frenderer::camera::{Camera, FPCamera};
 use frenderer::renderer::textured::Model;
 use frenderer::types::*;
-use frenderer::{Engine, Key, Result, WindowSettings, MousePos};
+use frenderer::{Engine, Key, MousePos, Result, WindowSettings};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
@@ -24,6 +24,9 @@ const WALL_Z: f32 = 0.5 * 100.0;
 const DOOR_X: f32 = 0.1 * 100.0;
 const DOOR_Y: f32 = 0.33 * 100.0;
 const DOOR_Z: f32 = 0.25 * 100.0;
+
+const ROOM_WIDTH: f32 = 300.0;
+const ROOM_LENGTH: f32 = 295.0;
 
 pub struct Player {
     object: GameObject,
@@ -69,6 +72,14 @@ impl Player {
     pub fn change_room(&mut self, new_roomid: usize) {
         self.current_room = new_roomid;
     }
+
+    pub fn find_current_room(&mut self) {
+        let room_id = self
+            .map
+            .find_current_room(self.object.trf.translation.x, self.object.trf.translation.z);
+        println!("Current room id is {room_id}");
+        self.change_room(room_id);
+    }
 }
 
 impl fmt::Debug for Player {
@@ -95,8 +106,9 @@ impl GameObject {
 
 pub struct Room {
     id: usize,
-    flats: [usize; 4],           // indices of walls of the room.
-    connected_rooms: [usize; 4], //point by ID and N,E,S,W, -1 for no room
+    flats: [usize; 4],            // indices of walls of the room.
+    connected_rooms: [usize; 4],  //point by ID and N,E,S,W, -1 for no room
+    bottom_left_corner: [f32; 2], // point coordinates for the bottom left corner of the room.
 }
 impl Room {
     pub fn get_flats(&self) -> &[usize] {
@@ -184,13 +196,20 @@ impl Map {
             end_room_id,
         }
     }
-    pub fn add_room(&mut self, id: usize, flats: [usize; 4], connected_rooms: [usize; 4]) {
+    pub fn add_room(
+        &mut self,
+        id: usize,
+        flats: [usize; 4],
+        connected_rooms: [usize; 4],
+        bottom_left_corner: [f32; 2],
+    ) {
         self.rooms_list.insert(
             id,
             Room {
                 id: id,
                 flats: flats,
                 connected_rooms: connected_rooms,
+                bottom_left_corner: bottom_left_corner,
             },
         );
     }
@@ -220,6 +239,22 @@ impl Map {
 
     pub fn get_rooms_list(&mut self) -> &HashMap<usize, Room> {
         &self.rooms_list
+    }
+
+    // Finds the current room the player is in given the player's x and z coordinates.
+    pub fn find_current_room(&self, x: f32, z: f32) -> usize {
+        for room_tuple in self.rooms_list.iter() {
+            let room = room_tuple.1;
+            if room.bottom_left_corner[0] <= x
+                && x <= room.bottom_left_corner[0] + ROOM_WIDTH
+                && room.bottom_left_corner[1] <= z
+                && z <= room.bottom_left_corner[1] + ROOM_LENGTH
+            {
+                return *room_tuple.0;
+            }
+        }
+        println!("Player coords: x = {x}, z = {z}");
+        return 10000;
     }
 }
 pub struct GameState {
@@ -291,6 +326,11 @@ impl frenderer::World for World {
         let move_z = input.key_axis(Key::S, Key::W) as f32;
         let move_x = input.key_axis(Key::D, Key::A) as f32;
         let grab = input.is_key_released(Key::Space);
+        let find_room = input.is_key_released(Key::F);
+
+        if find_room {
+            self.player.find_current_room();
+        }
 
         if grab {
             self.player.grab(&mut self.textured);
@@ -303,14 +343,12 @@ impl frenderer::World for World {
 
         player.trf.prepend_rotation(rot);
 
-        player.trf.prepend_translation(Vec3::new(move_x * 100.0, 0., move_z * 100.0));
+        player
+            .trf
+            .prepend_translation(Vec3::new(move_x * 100.0, 0., move_z * 100.0));
 
-
-        self.fp_camera.update(
-            &input,
-            player.trf.translation,
-            player.trf.rotation,
-        );
+        self.fp_camera
+            .update(&input, player.trf.translation, player.trf.rotation);
         self.fp_camera.update_camera(&mut self.camera);
 
         for _s in self.sprites.iter_mut() {
@@ -420,7 +458,17 @@ fn main() -> Result<()> {
             connected_rooms[3].as_i64().unwrap() as usize,
         ];
 
-        map.add_room(room_id, flats_arr, connected_rooms_arr);
+        let bottom_left_corner = room["bottom_left_corner"].as_array().unwrap();
+        let bottom_left_corner_arr: [f32; 2] = [
+            bottom_left_corner[0].as_f64().unwrap() as f32,
+            bottom_left_corner[1].as_f64().unwrap() as f32,
+        ];
+        map.add_room(
+            room_id,
+            flats_arr,
+            connected_rooms_arr,
+            bottom_left_corner_arr,
+        );
     }
 
     let mut flats_vec: Vec<Flat> = vec![];
