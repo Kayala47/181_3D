@@ -27,19 +27,37 @@ const COLLIS_THRESHHOLD: f32 = 1.0;
 const ROOM_RADIUS: f32 = 50.0; //not the right word, but half the length.
 const DOOR_THRESHOLD: f32 = 5.0; // if within this distance of a door, need to have a key
 
-const WALL_X: f32 = 0.1 * 100.0;
-const WALL_Y: f32 = 1.0 * 100.0;
-const WALL_Z: f32 = 0.5 * 100.0;
+const WALL_WIDTH: f32 = 3.6 * 100.0;
+const WALL_HEIGHT: f32 =1.0 * 100.0;
 
-const DOOR_X: f32 = 0.1 * 100.0;
-const DOOR_Y: f32 = 0.33 * 100.0;
-const DOOR_Z: f32 = 0.25 * 100.0;
+const DOOR_WIDTH: f32 = 0.7 * 100.0;
+const DOOR_HEIGHT: f32 = 1. * 100.0;
+
+const PLAYER_HEIGHT: f32 = WALL_HEIGHT / 2.;
 
 struct Plane {
     // A normal, has to be a unit vector
     n: Vec3,
     // And a distance of how far along the normal this is
     d: f32,
+}
+
+pub struct Sphere {
+    pos: Vec3,
+    r:f32
+}
+
+fn disp_sphere_plane(s:&Sphere, p:&Plane) -> Option<Vec3> {
+    // Find the distance of the sphere's center to the plane
+    let dist = (s.pos.dot(p.n) - p.d);
+    if dist.abs() <= s.r {
+        // If we offset from the sphere position opposite the normal,
+        // we'll end up hitting the plane at `dist` units away.  So
+        // the displacement is just the plane's normal * (r-dist).
+        Some(p.n * (s.r - dist))
+    } else {
+        None
+    }
 }
 
 struct Door_Collision {
@@ -125,6 +143,13 @@ impl Player {
         dbg!(&self.map.room_keys.get(&self.current_room).unwrap());
         dbg!(textureds);
         dbg!(&self.keys_grabbed);
+    }
+
+    pub fn shape(&self) -> Sphere {
+        Sphere {
+            pos: self.object.trf.translation,
+            r: PLAYER_HEIGHT,
+        }
     }
 
     pub fn change_room(&mut self, new_roomid: usize) {
@@ -362,6 +387,8 @@ impl frenderer::World for World {
             self.player.grab(&mut self.textured);
         }
 
+        let shape = self.player.shape();
+
         let player = &mut self.player.object;
 
         let MousePos { x: dx, .. } = input.mouse_delta();
@@ -373,6 +400,16 @@ impl frenderer::World for World {
         player
             .trf
             .prepend_translation(Vec3::new(move_x * 100.0, 0., move_z * 100.0));
+
+        
+        
+        for wall in self.player.map.rooms_list.get(&self.player.current_room).unwrap().flats{
+
+            if let Some(disp) = disp_sphere_plane(&shape, )
+
+
+        }
+
 
         self.fp_camera
             .update(&input, player.trf.translation, player.trf.rotation);
