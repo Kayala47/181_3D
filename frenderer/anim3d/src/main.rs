@@ -14,6 +14,7 @@ use std::rc::Rc;
 const DT: f64 = 1.0 / 60.0;
 
 const GRAB_THRESHOLD: f32 = 100.0;
+const COLLIS_THRESHHOLD: f32 = 1.0;
 const ROOM_RADIUS: f32 = 50.0; //not the right word, but half the length.
 const DOOR_THRESHOLD: f32 = 5.0; // if within this distance of a door, need to have a key
 
@@ -34,19 +35,41 @@ struct Plane {
 
 struct Wall {
     trf: Similarity3,
-    model: Rc<Flat>,
+    wall: Rc<Flat>,
+    door: Option<Rc<Flat>>,
 }
 
 impl Wall {
     fn shape(&self) -> Plane {
         Plane {
-            n: self.trf.rotation * Vec3::unit_y(),
-            d: self.trf.translation.y + self.trf.scale,
+            n: self.wall.trf.rotation * Vec3::unit_y(),
+            d: self.wall.trf.translation.y + self.trf.scale,
         }
     }
 
-    fn get_model(&self) -> &Flat {
-        &self.model
+    fn get_models(&self) -> (&Flat, &Option<Rc<Flat>>) {
+        (&self.wall, &self.door)
+    }
+
+    fn check_collision(&self, other: &Vec3) -> bool {
+        //should tell us whether "other" can pass through
+        // other can pass when two conditions are met: it hits the wall and also does not hit an open door
+        // true tells us to stop the player's velocity
+
+        let wall_coll = distance(self.wall.trf.translation, *other) <= COLLIS_THRESHHOLD;
+
+        let door_coll = match &self.door {
+            None => false,
+            Some(d) => {
+                if distance(d.trf.translation, *other) > COLLIS_THRESHHOLD {
+                    false
+                } else {
+                    true
+                }
+            }
+        };
+
+        wall_coll && door_coll
     }
 }
 
@@ -93,6 +116,10 @@ impl Player {
 
     pub fn change_room(&mut self, new_roomid: usize) {
         self.current_room = new_roomid;
+    }
+
+    pub fn get_pos(&self) -> Vec3 {
+        self.object.trf.translation
     }
 }
 
