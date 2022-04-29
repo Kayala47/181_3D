@@ -21,8 +21,13 @@ use std::rc::Rc;
 const DT: f64 = 1.0 / 60.0;
 
 const GRAB_THRESHOLD: f32 = 100.0;
-const ROOM_RADIUS: f32 = 50.0; //not the right word, but half the length.
-const DOOR_THRESHOLD: f32 = 5.0; // if within this distance of a door, need to have a key
+
+const WALL_WIDTH: f32 = 3.0 * 100.0; //x
+const WALL_HEIGHT: f32 = 1.0 * 100.0; //y
+const WALL_THICKNESS: f32 = 0.1 * 100.0; //z
+
+const DOOR_WIDTH: f32 = 0.3 * 100.0;
+const DOOR_HEIGHT: f32 = 0.7 * 100.0;
 
 const WALL_X: f32 = 0.1 * 100.0;
 const WALL_Y: f32 = 1.0 * 100.0;
@@ -34,6 +39,41 @@ const DOOR_Z: f32 = 0.25 * 100.0;
 
 const ROOM_WIDTH: f32 = 300.0;
 const ROOM_LENGTH: f32 = 295.0;
+
+const PLAYER_HEIGHT: f32 = WALL_HEIGHT / 2.;
+
+//let's call this the radius of each
+const COLLIS_THRESHHOLD: f32 = (WALL_WIDTH / 2.) + (PLAYER_HEIGHT / 2.);
+
+struct Circle {
+    center: Vec2,
+    radius: f32,
+}
+
+struct Wall {
+    wall: AABB2D,
+    door: Option<AABB2D>,
+}
+
+struct AABB2D {
+    center: Vec2,
+    half_widths: Vec2,
+}
+
+fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
+    let x_disp = r.half_widths.x + c.radius - (c.center.x - r.center.x).abs();
+    let z_disp = r.half_widths.y + c.radius - (c.center.y - r.center.y).abs();
+    if x_disp > 0.0 || z_disp > 0.0 {
+        if x_disp < z_disp {
+            Some(Vec3::new(x_disp, 0.0, 0.))
+        } else {
+            Some(Vec3::new(0.,0., z_disp ))
+        }
+    }
+    else{
+        None
+    }
+}
 
 pub struct Player {
     object: GameObject,
@@ -78,6 +118,13 @@ impl Player {
 
     pub fn change_room(&mut self, new_roomid: usize) {
         self.current_room = new_roomid;
+    }
+
+    fn shape(&self) -> Circle {
+        Circle {
+            center: Vec2::new(self.object.trf.translation.x, self.object.trf.translation.z),
+            radius: PLAYER_HEIGHT / 2.,
+        }
     }
 
     pub fn find_current_room(&mut self) {
@@ -192,6 +239,7 @@ pub struct Map {
     rooms_list: HashMap<usize, Room>,
     room_keys: HashMap<usize, Vec<RoomKey>>, // list of every key found in each room
     end_room_id: usize,
+    walls: Vec<Wall>,
 }
 impl Map {
     pub fn new(start_room_id: usize, end_room_id: usize) -> Self {
@@ -199,8 +247,8 @@ impl Map {
             start_room_id,
             rooms_list: HashMap::new(),
             room_keys: HashMap::new(),
-
             end_room_id,
+            walls: vec![],
         }
     }
     pub fn add_room(
@@ -246,6 +294,10 @@ impl Map {
 
     pub fn get_rooms_list(&mut self) -> &HashMap<usize, Room> {
         &self.rooms_list
+    }
+
+    fn add_walls(&mut self, w: Vec<Wall>) {
+        self.walls = w;
     }
 
     // Finds the current room the player is in given the player's x and z coordinates.
@@ -343,6 +395,7 @@ impl frenderer::World for World {
             self.player.grab(&mut self.textured);
         }
 
+        let player_shape = &self.player.shape();
         let player = &mut self.player.object;
 
         let MousePos { x: dx, .. } = input.mouse_delta();
@@ -350,9 +403,24 @@ impl frenderer::World for World {
 
         player.trf.prepend_rotation(rot);
 
+        
         player
             .trf
             .prepend_translation(Vec3::new(move_x * 100.0, 0., move_z * 100.0));
+
+
+        for wall_idx in self.player.map.rooms_list.get(&self.player.current_room).unwrap().flats{
+            //use this to only check collisions w walls around the player
+
+            if let Some(disp) = displacement(player_shape, &self.player.map.walls[wall_idx].wall){
+
+                println!("hit the wall");
+                // player.trf.translation -= disp;
+
+            }
+            continue;
+        }
+        
 
         self.fp_camera
             .update(&input, player.trf.translation, player.trf.rotation);
@@ -487,19 +555,24 @@ fn main() -> Result<()> {
     }
 
     let mut flats_vec: Vec<Flat> = vec![];
+    let mut walls_vec: Vec<Wall> = vec![];
     let flats = json.get("flats").unwrap();
     for flat in flats.as_array().unwrap().iter() {
         let mut rot = Rotor3::identity();
 
         //1.57079 Rust was complaining about this value. now is std::f32::consts::FRAC_PI_2
 
+        let mut rotate = false;
         if !(flat["is_identity"].as_bool().unwrap()) {
+            rotate = true;
             rot = Rotor3::from_rotation_xz(std::f32::consts::FRAC_PI_2)
         }
 
         let x = flat["x"].as_f64().unwrap() as f32;
         let y = -15.0;
         let z = flat["z"].as_f64().unwrap() as f32;
+
+        let mut door_needed = true;
 
         let model = {
             if flat["door"].as_i64().unwrap() as i32 == 0 {
@@ -510,17 +583,45 @@ fn main() -> Result<()> {
                 wall_with_door_opened_model.clone()
             } else if flat["door"].as_i64().unwrap() as i32 == 2 {
                 // Wall model with a locked door
+                door_needed = false;
                 wall_with_door_closed_model.clone()
             } else {
                 panic!("Invalid value for specification of wall.")
             }
         };
+
+        let trf = Similarity3::new(Vec3::new(x, y, z), rot, 100.);
+        let half_widths_wall = if !rotate {Vec2::new(WALL_WIDTH/2., WALL_THICKNESS/2.) } else {Vec2::new(WALL_THICKNESS/2., WALL_WIDTH/2.)};
+
+        let wall_coll = AABB2D {
+            center: Vec2::new(trf.translation.x, trf.translation.z),
+            half_widths: half_widths_wall,
+        };
+
+        let mut door_coll = None;
+        if door_needed {
+            let half_widths_door = if !rotate {Vec2::new(DOOR_WIDTH/2., WALL_THICKNESS/2.) } 
+            else {Vec2::new(WALL_THICKNESS/2., DOOR_WIDTH/2.)}; 
+            door_coll = Some(AABB2D {
+                center: Vec2::new(trf.translation.x, trf.translation.z),
+                half_widths: half_widths_door,
+            });
+            
+        }
+
+        let new_wall = Wall {
+            wall: wall_coll,
+            door: door_coll,
+        };
+
         let new_flat = Flat {
-            trf: Similarity3::new(Vec3::new(x, y, z), rot, 100.),
+            trf,
             model: model.clone(),
         };
         flats_vec.push(new_flat);
+        walls_vec.push(new_wall);
     }
+    map.add_walls(walls_vec);
 
     let player_obj = GameObject {
         trf: Similarity3::new(Vec3::new(-20.0, -15.0, -10.0), Rotor3::identity(), 0.1),
