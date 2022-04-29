@@ -24,11 +24,12 @@ const DT: f64 = 1.0 / 60.0;
 const GRAB_THRESHOLD: f32 = 100.0;
 const ROOM_RADIUS: f32 = 50.0; //not the right word, but half the length.
 
-const WALL_WIDTH: f32 = 3.6 * 100.0;
+const WALL_WIDTH: f32 = 3.0 * 100.0;
 const WALL_HEIGHT: f32 = 1.0 * 100.0;
+const WALL_THICKNESS: f32 = 0.1 * 100.0;
 
-const DOOR_WIDTH: f32 = 0.7 * 100.0;
-const DOOR_HEIGHT: f32 = 1. * 100.0;
+const DOOR_WIDTH: f32 = 0.3 * 100.0;
+const DOOR_HEIGHT: f32 = 0.7 * 100.0;
 
 const PLAYER_HEIGHT: f32 = WALL_HEIGHT / 2.;
 
@@ -36,14 +37,15 @@ const PLAYER_HEIGHT: f32 = WALL_HEIGHT / 2.;
 const COLLIS_THRESHHOLD: f32 = (WALL_WIDTH / 2.) + (PLAYER_HEIGHT / 2.);
 
 struct AABB3D {
-    pos: Vec3,
+    // pos: Vec3,
     size: Vec3,
+    trf: Similarity3,
 }
 
 impl fmt::Debug for AABB3D {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AABB3D")
-            .field("pos", &self.pos)
+            .field("pos", &self.trf.translation)
             .field("size", &self.size)
             .finish()
     }
@@ -94,12 +96,45 @@ fn disp_sphere_plane(s: &Sphere, p: &Plane) -> Option<Vec3> {
 }
 
 fn disp_sphere_rect(s: &Sphere, r: &AABB3D) -> Option<Vec3> {
-    let dist = distance(s.pos, r.pos);
-    if dist.abs() <= COLLIS_THRESHHOLD {
+
+    let wall_lt = r.trf.translation - Vec3::new(WALL_WIDTH / 2., 0., 0.);
+    let wall_rt = r.trf.translation + Vec3::new(WALL_WIDTH / 2., 0., 0.);
+    let wall_top = r.trf.translation + Vec3::new(0., WALL_HEIGHT / 2., 0. );
+    let wall_bottom = r.trf.translation - Vec3::new(0., WALL_HEIGHT / 2., 0.);
+    let wall_close = r.trf.translation - Vec3::new(0., 0., WALL_THICKNESS / 2.);
+    let wall_far = r.trf.translation + Vec3::new(0., 0., WALL_THICKNESS / 2.);
+    let x = s.pos.x.clamp(wall_lt.x, wall_rt.x);
+    let y = s.pos.y.clamp(wall_bottom.y, wall_top.y);
+    let z = s.pos.z.clamp(wall_close.z, wall_far.z);
+
+
+    let offset = (Vec3::new(x, y, z)) - s.pos;
+    let dist = offset.mag();
+
+    if dist <= s.r {
         // If we offset from the sphere position opposite the normal,
         // we'll end up hitting the plane at `dist` units away.  So
         // the displacement is just the plane's normal * (r-dist).
-        Some(r.pos * (s.r - dist))
+
+        let both_ctrs: Vec3 = (r.trf.translation - s.pos).normalized();
+        let disp = both_ctrs * dist;
+
+        Some(disp)
+    } else {
+        None
+    }
+}
+
+fn disp_sphere_sphere(s1:&Sphere, s2:&Sphere) -> Option<Vec3> {
+    let offset = s2.pos - s1.pos;
+    let distance = offset.mag();
+    if distance < s1.r + s2.r {
+        // Make sure we don't divide by 0
+        let distance = if distance == 0.0 { 1.0 } else { distance };
+        // How much combined radius is "left over"?
+        let disp_mag = (s1.r+s2.r)-distance;
+        // Normalize offset and multiply by the amount to push
+        Some(offset * (disp_mag / distance))
     } else {
         None
     }
@@ -116,24 +151,24 @@ pub struct Wall {
 }
 
 impl Wall {
-    // fn shape(&self) -> AABB3D {
-    //     AABB3D {
-    //         pos: self.trf.translation,
-    //         size: Vec3::new(WALL_WIDTH, WALL_HEIGHT, 0.1 * 100.),
-    //         // size: Vec3::new(WALL_WIDTH, WALL_HEIGHT, 0.1 * 100.).rotated_by(self.trf.rotation),
-    //     }
-    // }
-
-    fn shape(&self) -> Plane {
-        Plane {
-            //none of these work well. tried every variation
-            // n: self.wall.trf.rotation * Vec3::unit_y(),
-            n: self.wall.trf.rotation * Vec3::unit_x(),
-            // n: self.wall.trf.rotation * Vec3::unit_z(),
-            // n: self.wall.trf.rotation * Vec3::new(0., 1., 1.),
-            d: self.wall.trf.translation.y + self.trf.scale,
+    fn shape(&self) -> AABB3D {
+        AABB3D {
+            trf: self.trf,
+            // size: Vec3::new(WALL_WIDTH, WALL_HEIGHT, 0.1 * 100.),
+            size: Vec3::new(WALL_WIDTH, WALL_THICKNESS, WALL_HEIGHT).rotated_by(self.trf.rotation),
         }
     }
+
+    // fn shape(&self) -> Plane {
+    //     Plane {
+    //         //none of these work well. tried every variation
+    //         // n: self.wall.trf.rotation * Vec3::unit_y(),
+    //         n: self.wall.trf.rotation * Vec3::unit_x(),
+    //         // n: self.wall.trf.rotation * Vec3::unit_z(),
+    //         // n: self.wall.trf.rotation * Vec3::new(0., 1., 1.),
+    //         d: self.wall.trf.translation.y + self.trf.scale,
+    //     }
+    // }
 
     fn get_model(&self) -> (&Flat, &Option<Rc<Door_Collision>>) {
         (&self.wall, &self.door)
@@ -477,7 +512,7 @@ impl frenderer::World for World {
 
             // dbg!(&plane);
             // dbg!(wall);
-            if let Some(disp) = disp_sphere_plane(&shape, &wall.shape()) {
+            if let Some(disp) = disp_sphere_rect(&shape, &wall.shape()) {
                 dbg!("displacement happened");
                 player.trf.prepend_translation(disp);
             }
