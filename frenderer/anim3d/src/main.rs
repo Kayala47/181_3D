@@ -5,7 +5,14 @@ use frenderer::assets::{AnimRef, Texture};
 use frenderer::camera::{Camera, FPCamera};
 use frenderer::renderer::textured::Model;
 use frenderer::types::*;
-use frenderer::{Engine, Key, MousePos, Result, WindowSettings};
+use frenderer::{Engine, Key, Result, WindowSettings, MousePos};
+use kira::{
+	manager::{AudioManager, AudioManagerSettings},
+    sound::{SoundSettings,},
+    arrangement::{LoopArrangementSettings, Arrangement},
+    instance::{InstanceSettings},
+    Tempo,
+};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
@@ -403,10 +410,10 @@ fn main() -> Result<()> {
     );
     let fp_camera = FPCamera::new();
 
-    let marble_tex = engine.load_texture(std::path::Path::new("content/sphere-diffuse.jpg"))?;
-    let marble_meshes = engine.load_textured(std::path::Path::new("content/sphere.obj"))?;
-    let marble = engine.create_textured_model(marble_meshes, vec![marble_tex]);
-    let floor_tex = engine.load_texture(std::path::Path::new("content/cube-diffuse.jpg"))?;
+    let key_tex = engine.load_texture(std::path::Path::new("content/silver.png"))?;
+    let key_meshes = engine.load_textured(std::path::Path::new("content/silver-key.obj"))?;
+    let key = engine.create_textured_model(key_meshes, vec![key_tex]);
+    let floor_tex = engine.load_texture(std::path::Path::new("content/marble-floor.png"))?;
     let floor_meshes = engine.load_textured(std::path::Path::new("content/floor.obj"))?;
     let floor = engine.create_textured_model(floor_meshes, vec![floor_tex]);
 
@@ -419,6 +426,14 @@ fn main() -> Result<()> {
     let wall_no_door_model =
         engine.load_flat(std::path::Path::new("content/walls/wall_no_door.glb"))?;
 
+    let trophy_tex = engine.load_texture(std::path::Path::new("content/gold-trophy.png"))?;
+    let trophy_meshes = engine.load_textured(std::path::Path::new("content/trophyobjectfile.obj"))?;
+    let trophy = engine.create_textured_model(trophy_meshes, vec![trophy_tex, trophy_tex]);
+    let trophy_texture = Textured {
+        trf: Similarity3::new(Vec3::new(0.0, 0.0, -10.0), Rotor3::identity(), 5.0),
+        model: Rc::clone(&trophy),
+    };
+    
     let tex = engine.load_texture(std::path::Path::new("content/robot.png"))?;
     let meshes = engine.load_skinned(
         std::path::Path::new("content/characterSmall.fbx"),
@@ -514,14 +529,15 @@ fn main() -> Result<()> {
         state: AnimationState { t: 0.0 },
     };
 
+    let key_rot = Rotor3::from_rotation_yz(std::f32::consts::FRAC_PI_2 * -1.);
     let key_positions = vec![
-        Similarity3::new(Vec3::new(0.0, 0.0, -10.0), Rotor3::identity(), 5.0),
-        Similarity3::new(Vec3::new(10.0, 0.0, -10.0), Rotor3::identity(), 5.0),
-        Similarity3::new(Vec3::new(0.0, 10.0, -15.0), Rotor3::identity(), 5.0),
+        Similarity3::new(Vec3::new(0.0, 0.0, -10.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(10.0, 0.0, -10.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(0.0, 10.0, -15.0), key_rot, 2.),
     ];
 
     let (keys, mut key_textureds) =
-        multiple_key_pairs(key_positions, marble, vec![(0, 1), (0, 2), (0, 3)]);
+        multiple_key_pairs(key_positions, key, vec![(0, 1), (0, 2), (0, 3)]);
 
     map.add_mult_keys(keys);
 
@@ -535,9 +551,10 @@ fn main() -> Result<()> {
     // let mut all_textureds = vec![];
     all_textureds.append(&mut key_textureds);
     all_textureds.append(&mut vec![Textured {
-        trf: Similarity3::new(Vec3::new(0.0, -25.0, 0.0), Rotor3::identity(), 10.0),
+        trf: Similarity3::new(Vec3::new(0.0, -32.0, 0.0), Rotor3::identity(), 15.0),
         model: floor,
     }]);
+    all_textureds.push(trophy_texture);
     // For testing purposes
 
     // let new_flat = Flat {
@@ -569,6 +586,18 @@ fn main() -> Result<()> {
         flats: flats_vec,
         textured: all_textureds,
     };
+
+    // load and play background music
+    let mut audio_manager = AudioManager::new(AudioManagerSettings::default()).unwrap();
+    let sound_handle = audio_manager.load_sound(
+            "content/background.mp3",
+            SoundSettings::new().semantic_duration(Tempo(128.0).beats_to_seconds(8.0)),
+    ).unwrap();
+    let mut arrangement_handle = audio_manager.add_arrangement(Arrangement::new_loop(
+            &sound_handle,
+            LoopArrangementSettings::default(),
+    )).unwrap();
+    arrangement_handle.play(InstanceSettings::default()).unwrap();
 
     engine.play(world)
 }

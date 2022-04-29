@@ -2,6 +2,7 @@ use crate::animation;
 use crate::assets::{self, Assets};
 use crate::input::Input;
 use crate::renderer;
+use crate::types::*;
 use crate::vulkan::Vulkan;
 use color_eyre::eyre::Result;
 use std::rc::Rc;
