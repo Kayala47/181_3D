@@ -6,34 +6,48 @@ use frenderer::camera::{Camera, FPCamera};
 use frenderer::renderer::textured::Model;
 use frenderer::types::*;
 use frenderer::{Engine, Key, MousePos, Result, WindowSettings};
+use russimp::AABB;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
 use std::rc::Rc;
 
 /*
-TODO: 2 questions
-- How to calculate a door from inside a wall? Ie, make a Similarity3 object from the middle portion
-of a wall Similarity3
-- How to do the prepend without actually applying it? Ie, get a Vec3 position without applying it to
-the player
+TODO:
+- get wall detection working
+- add doors
 
 */
 
 const DT: f64 = 1.0 / 60.0;
 
 const GRAB_THRESHOLD: f32 = 100.0;
-const COLLIS_THRESHHOLD: f32 = 1.0;
 const ROOM_RADIUS: f32 = 50.0; //not the right word, but half the length.
-const DOOR_THRESHOLD: f32 = 5.0; // if within this distance of a door, need to have a key
 
 const WALL_WIDTH: f32 = 3.6 * 100.0;
-const WALL_HEIGHT: f32 =1.0 * 100.0;
+const WALL_HEIGHT: f32 = 1.0 * 100.0;
 
 const DOOR_WIDTH: f32 = 0.7 * 100.0;
 const DOOR_HEIGHT: f32 = 1. * 100.0;
 
 const PLAYER_HEIGHT: f32 = WALL_HEIGHT / 2.;
+
+//let's call this the radius of each
+const COLLIS_THRESHHOLD: f32 = (WALL_WIDTH / 2.) + (PLAYER_HEIGHT / 2.);
+
+struct AABB3D {
+    pos: Vec3,
+    size: Vec3,
+}
+
+impl fmt::Debug for AABB3D {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AABB3D")
+            .field("pos", &self.pos)
+            .field("size", &self.size)
+            .finish()
+    }
+}
 
 struct Plane {
     // A normal, has to be a unit vector
@@ -42,14 +56,33 @@ struct Plane {
     d: f32,
 }
 
-pub struct Sphere {
-    pos: Vec3,
-    r:f32
+impl fmt::Debug for Plane {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Plane")
+            .field("n", &self.n)
+            .field("distance", &self.d)
+            .finish()
+    }
 }
 
-fn disp_sphere_plane(s:&Sphere, p:&Plane) -> Option<Vec3> {
+pub struct Sphere {
+    pos: Vec3,
+    r: f32,
+}
+
+impl fmt::Debug for Sphere {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Sphere")
+            .field("pos", &self.pos)
+            .field("r", &self.r)
+            .finish()
+    }
+}
+
+fn disp_sphere_plane(s: &Sphere, p: &Plane) -> Option<Vec3> {
     // Find the distance of the sphere's center to the plane
     let dist = (s.pos.dot(p.n) - p.d);
+    dbg!(&dist);
     if dist.abs() <= s.r {
         // If we offset from the sphere position opposite the normal,
         // we'll end up hitting the plane at `dist` units away.  So
@@ -60,20 +93,44 @@ fn disp_sphere_plane(s:&Sphere, p:&Plane) -> Option<Vec3> {
     }
 }
 
+fn disp_sphere_rect(s: &Sphere, r: &AABB3D) -> Option<Vec3> {
+    let dist = distance(s.pos, r.pos);
+    if dist.abs() <= COLLIS_THRESHHOLD {
+        // If we offset from the sphere position opposite the normal,
+        // we'll end up hitting the plane at `dist` units away.  So
+        // the displacement is just the plane's normal * (r-dist).
+        Some(r.pos * (s.r - dist))
+    } else {
+        None
+    }
+}
+
 struct Door_Collision {
     trf: Similarity3,
 }
 
-struct Wall {
+pub struct Wall {
     trf: Similarity3,
     wall: Flat,
     door: Option<Rc<Door_Collision>>,
 }
 
 impl Wall {
+    // fn shape(&self) -> AABB3D {
+    //     AABB3D {
+    //         pos: self.trf.translation,
+    //         size: Vec3::new(WALL_WIDTH, WALL_HEIGHT, 0.1 * 100.),
+    //         // size: Vec3::new(WALL_WIDTH, WALL_HEIGHT, 0.1 * 100.).rotated_by(self.trf.rotation),
+    //     }
+    // }
+
     fn shape(&self) -> Plane {
         Plane {
-            n: self.wall.trf.rotation * Vec3::unit_y(),
+            //none of these work well. tried every variation
+            // n: self.wall.trf.rotation * Vec3::unit_y(),
+            n: self.wall.trf.rotation * Vec3::unit_x(),
+            // n: self.wall.trf.rotation * Vec3::unit_z(),
+            // n: self.wall.trf.rotation * Vec3::new(0., 1., 1.),
             d: self.wall.trf.translation.y + self.trf.scale,
         }
     }
@@ -91,16 +148,19 @@ impl Wall {
 
         let door_coll = match &self.door {
             None => false,
-            Some(d) => {
-                if distance(d.trf.translation, *other) > COLLIS_THRESHHOLD {
-                    false
-                } else {
-                    true
-                }
-            }
+            Some(d) => !(distance(d.trf.translation, *other) > COLLIS_THRESHHOLD),
         };
 
         wall_coll && door_coll
+    }
+}
+
+impl fmt::Debug for Wall {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Wall")
+            .field("pos", &self.trf.translation)
+            .field("has door", &self.door.is_some())
+            .finish()
     }
 }
 
@@ -116,7 +176,7 @@ impl Player {
         //checks if keys are nearby and grabs them
 
         let curr_pos = self.object.trf.translation;
-        dbg!(curr_pos);
+        // dbg!(curr_pos);
 
         //two steps: filter out the ones that match first, then actually pick them up
 
@@ -128,8 +188,6 @@ impl Player {
             let textured_pos = t.trf.translation;
             distance(curr_pos, textured_pos) < GRAB_THRESHOLD
         }) {
-            println!("attempting to grab something");
-
             if pos < keys.len() && pos < textureds.len() - 1 {
                 let key = keys.remove(pos);
                 key.pick_up(self);
@@ -139,10 +197,6 @@ impl Player {
                 println!("not enough elements!");
             }
         }
-
-        dbg!(&self.map.room_keys.get(&self.current_room).unwrap());
-        dbg!(textureds);
-        dbg!(&self.keys_grabbed);
     }
 
     pub fn shape(&self) -> Sphere {
@@ -262,6 +316,7 @@ pub struct Map {
     rooms_list: HashMap<usize, Room>,
     room_keys: HashMap<usize, Vec<RoomKey>>, // list of every key found in each room
     end_room_id: usize,
+    walls: Vec<Wall>,
 }
 impl Map {
     pub fn new(start_room_id: usize, end_room_id: usize) -> Self {
@@ -271,6 +326,7 @@ impl Map {
             room_keys: HashMap::new(),
 
             end_room_id,
+            walls: vec![],
         }
     }
     pub fn add_room(&mut self, id: usize, flats: [usize; 4], connected_rooms: [usize; 4]) {
@@ -309,6 +365,10 @@ impl Map {
 
     pub fn get_rooms_list(&mut self) -> &HashMap<usize, Room> {
         &self.rooms_list
+    }
+
+    pub fn add_walls(&mut self, walls: Vec<Wall>) {
+        self.walls = walls;
     }
 }
 pub struct GameState {
@@ -401,15 +461,28 @@ impl frenderer::World for World {
             .trf
             .prepend_translation(Vec3::new(move_x * 100.0, 0., move_z * 100.0));
 
-        
-        
-        for wall in self.player.map.rooms_list.get(&self.player.current_room).unwrap().flats{
+        // dbg!(&shape);
+        // println!("start");
+        for wall_idx in self
+            .player
+            .map
+            .rooms_list
+            .get(&self.player.current_room)
+            .unwrap()
+            .flats
+        {
+            // for wall in &self.player.map.walls {
+            let wall = &self.player.map.walls[wall_idx];
+            let plane = wall.shape();
 
-            if let Some(disp) = disp_sphere_plane(&shape, )
-
-
+            // dbg!(&plane);
+            // dbg!(wall);
+            if let Some(disp) = disp_sphere_plane(&shape, &wall.shape()) {
+                dbg!("displacement happened");
+                player.trf.prepend_translation(disp);
+            }
         }
-
+        // println!("end");
 
         self.fp_camera
             .update(&input, player.trf.translation, player.trf.rotation);
@@ -601,6 +674,7 @@ fn main() -> Result<()> {
         multiple_key_pairs(key_positions, marble, vec![(0, 1), (0, 2), (0, 3)]);
 
     map.add_mult_keys(keys);
+    map.add_walls(walls_vec);
 
     let mut all_textureds = vec![];
 
