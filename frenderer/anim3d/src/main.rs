@@ -381,6 +381,14 @@ fn main() -> Result<()> {
     let wall_no_door_model =
         engine.load_flat(std::path::Path::new("content/walls/wall_no_door.glb"))?;
 
+    let trophy_tex = engine.load_texture(std::path::Path::new("content/gold-trophy.png"))?;
+    let trophy_meshes = engine.load_textured(std::path::Path::new("content/trophyobjectfile.obj"))?;
+    let trophy = engine.create_textured_model(trophy_meshes, vec![trophy_tex, trophy_tex]);
+    let trophy_texture = Textured {
+        trf: Similarity3::new(Vec3::new(0.0, 0.0, -10.0), Rotor3::identity(), 5.0),
+        model: Rc::clone(&trophy),
+    };
+    
     let tex = engine.load_texture(std::path::Path::new("content/robot.png"))?;
     let meshes = engine.load_skinned(
         std::path::Path::new("content/characterSmall.fbx"),
@@ -490,6 +498,7 @@ fn main() -> Result<()> {
         trf: Similarity3::new(Vec3::new(0.0, -25.0, 0.0), Rotor3::identity(), 10.0),
         model: floor,
     }]);
+    all_textureds.push(trophy_texture);
     // For testing purposes
 
     // let new_flat = Flat {
