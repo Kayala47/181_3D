@@ -372,10 +372,10 @@ fn main() -> Result<()> {
     );
     let fp_camera = FPCamera::new();
 
-    let marble_tex = engine.load_texture(std::path::Path::new("content/sphere-diffuse.jpg"))?;
-    let marble_meshes = engine.load_textured(std::path::Path::new("content/sphere.obj"))?;
-    let marble = engine.create_textured_model(marble_meshes, vec![marble_tex]);
-    let floor_tex = engine.load_texture(std::path::Path::new("content/cube-diffuse.jpg"))?;
+    let key_tex = engine.load_texture(std::path::Path::new("content/silver.png"))?;
+    let key_meshes = engine.load_textured(std::path::Path::new("content/silver-key.obj"))?;
+    let key = engine.create_textured_model(key_meshes, vec![key_tex]);
+    let floor_tex = engine.load_texture(std::path::Path::new("content/marble-floor.png"))?;
     let floor_meshes = engine.load_textured(std::path::Path::new("content/floor.obj"))?;
     let floor = engine.create_textured_model(floor_meshes, vec![floor_tex]);
 
@@ -481,14 +481,15 @@ fn main() -> Result<()> {
         state: AnimationState { t: 0.0 },
     };
 
+    let key_rot = Rotor3::from_rotation_yz(std::f32::consts::FRAC_PI_2 * -1.);
     let key_positions = vec![
-        Similarity3::new(Vec3::new(0.0, 0.0, -10.0), Rotor3::identity(), 5.0),
-        Similarity3::new(Vec3::new(10.0, 0.0, -10.0), Rotor3::identity(), 5.0),
-        Similarity3::new(Vec3::new(0.0, 10.0, -15.0), Rotor3::identity(), 5.0),
+        Similarity3::new(Vec3::new(0.0, 0.0, -10.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(10.0, 0.0, -10.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(0.0, 10.0, -15.0), key_rot, 2.),
     ];
 
     let (keys, mut key_textureds) =
-        multiple_key_pairs(key_positions, marble, vec![(0, 1), (0, 2), (0, 3)]);
+        multiple_key_pairs(key_positions, key, vec![(0, 1), (0, 2), (0, 3)]);
 
     map.add_mult_keys(keys);
 
@@ -502,7 +503,7 @@ fn main() -> Result<()> {
     // let mut all_textureds = vec![];
     all_textureds.append(&mut key_textureds);
     all_textureds.append(&mut vec![Textured {
-        trf: Similarity3::new(Vec3::new(0.0, -25.0, 0.0), Rotor3::identity(), 10.0),
+        trf: Similarity3::new(Vec3::new(0.0, -32.0, 0.0), Rotor3::identity(), 15.0),
         model: floor,
     }]);
     all_textureds.push(trophy_texture);
