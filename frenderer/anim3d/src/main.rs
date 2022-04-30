@@ -125,14 +125,13 @@ impl Room {
 
 pub struct RoomKey {
     starts_roomid: usize, // the room that the key is in.
-    opens_roomid: usize,  // the room they open to
+    opens_wallid: usize,  // the wall they open to
     picked_up: bool,
 }
 impl RoomKey {
     pub fn pick_up(mut self, game_state: &mut Player) {
         self.picked_up = true;
         game_state.keys_grabbed.push(self);
-        //TODO: make it disappear   en
     }
 }
 
@@ -140,7 +139,7 @@ impl fmt::Debug for RoomKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RoomKey")
             .field("starts_roomid", &self.starts_roomid)
-            .field("opens_roomid", &self.opens_roomid)
+            .field("opens_wallid", &self.opens_wallid)
             .finish()
     }
 }
@@ -163,7 +162,7 @@ fn gen_key_pair(
 
     let key = RoomKey {
         starts_roomid: starts,
-        opens_roomid: opens,
+        opens_wallid: opens,
         picked_up: false,
     };
 
@@ -221,10 +220,10 @@ impl Map {
         );
     }
 
-    pub fn add_key(&mut self, starts_roomid: usize, opens_roomid: usize) {
+    pub fn add_key(&mut self, starts_roomid: usize, opens_wallid: usize) {
         let key = RoomKey {
             starts_roomid,
-            opens_roomid,
+            opens_wallid,
             picked_up: false,
         };
 
@@ -299,6 +298,7 @@ pub struct World {
 pub struct Flat {
     trf: Similarity3,
     model: Rc<frenderer::renderer::flat::Model>,
+    open_model: Rc<frenderer::renderer::flat::Model>,
 }
 pub struct Textured {
     trf: Similarity3,
@@ -357,7 +357,7 @@ impl frenderer::World for World {
         self.fp_camera
             .update(&input, player.trf.translation, player.trf.rotation);
         self.fp_camera.update_camera(&mut self.camera);
-
+    
         for _s in self.sprites.iter_mut() {
             //s.trf.append_rotation(rot);
             //s.size.x += dscale;
@@ -391,7 +391,18 @@ impl frenderer::World for World {
         let obj = &self.player.object;
         rs.render_skinned(obj.model.clone(), obj.animation, obj.state, obj.trf, 0);
         for (m_i, m) in self.flats.iter_mut().enumerate() {
-            rs.render_flat(m.model.clone(), m.trf, m_i);
+            let mut rendered = false;
+            for key in self.player.keys_grabbed.iter_mut() {
+                if key.opens_wallid.eq(&m_i) {
+                    rs.render_flat(m.open_model.clone(), m.trf, m_i);
+                    rendered = true;
+                    break;
+                }
+            }
+            if !rendered{
+                rs.render_flat(m.model.clone(), m.trf, m_i);
+            }
+            
         }
         for (t_i, t) in self.textured.iter_mut().enumerate() {
             rs.render_textured(t.model.clone(), t.trf, t_i);
@@ -518,6 +529,7 @@ fn main() -> Result<()> {
         let new_flat = Flat {
             trf: Similarity3::new(Vec3::new(x, y, z), rot, 100.),
             model: model.clone(),
+            open_model: wall_with_door_opened_model.clone()
         };
         flats_vec.push(new_flat);
     }
@@ -532,12 +544,15 @@ fn main() -> Result<()> {
     let key_rot = Rotor3::from_rotation_yz(std::f32::consts::FRAC_PI_2 * -1.);
     let key_positions = vec![
         Similarity3::new(Vec3::new(0.0, 0.0, -10.0), key_rot, 2.),
-        Similarity3::new(Vec3::new(10.0, 0.0, -10.0), key_rot, 2.),
-        Similarity3::new(Vec3::new(0.0, 10.0, -15.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(20.0, 0.0, -15.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(364.0, 0., 30.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(91.0, 0., 287.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(378., 0., 254.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(110.0, 0., 563.0), key_rot, 2.),
     ];
 
     let (keys, mut key_textureds) =
-        multiple_key_pairs(key_positions, key, vec![(0, 1), (0, 2), (0, 3)]);
+        multiple_key_pairs(key_positions, key, vec![(0, 1), (0, 3), (1,6), (2,8), (3,11), (4,13)]);
 
     map.add_mult_keys(keys);
 
