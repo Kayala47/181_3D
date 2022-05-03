@@ -131,11 +131,16 @@ pub struct Player {
     keys_grabbed: Vec<RoomKey>,
     current_room: usize, //id of room
     map: Map,            //so the player knows about the rooms
+    game_won: bool,
 }
 
 impl Player {
     pub fn grab(&mut self, textureds: &mut Vec<Textured>) {
         //checks if keys are nearby and grabs them
+
+        if self.game_won {
+            return
+        }
 
         let curr_pos = self.object.trf.translation;
 
@@ -143,6 +148,7 @@ impl Player {
 
         if self.current_room == 5 {
             println!("\n \n \n \n YOU WIN!!! \n \n \n \n ");
+            self.game_won = true;
             return;
         }
         // dbg!(curr_pos);
@@ -166,7 +172,7 @@ impl Player {
             let keys = self.map.room_keys.get_mut(&self.current_room).unwrap();
             dbg!(&keys);
 
-            if pos < keys.len() && pos < textureds.len() - 2 {
+            if pos < keys.len() && pos < textureds.len() - 3 {
                 let key = keys.remove(pos);
                 key.pick_up(self);
 
@@ -477,11 +483,18 @@ impl frenderer::World for World {
         let MousePos { x: dx, .. } = input.mouse_delta();
         let rot = Rotor3::from_rotation_xz(dx as f32 * (PI / 4.0) * DT as f32);
 
-        player.trf.prepend_rotation(rot);
+        if !self.player.game_won {
 
-        player
-            .trf
-            .prepend_translation(Vec3::new(move_x * 100.0, 0., move_z * 100.0));
+            player.trf.prepend_rotation(rot);
+
+            player
+                .trf
+                .prepend_translation(Vec3::new(move_x * 100.0, 0., move_z * 100.0));
+        }
+        else {
+            player.trf = Similarity3::new(Vec3::new(-990., 0.0, 590.) ,Rotor3::identity(), 1.0);
+        }
+        
 
         //use this to only check collisions w walls around the player
         // for wall_idx in self
@@ -595,8 +608,19 @@ fn main() -> Result<()> {
         engine.load_textured(std::path::Path::new("content/trophyobjectfile.obj"))?;
     let trophy = engine.create_textured_model(trophy_meshes, vec![trophy_tex, trophy_tex]);
     let trophy_texture = Textured {
-        trf: Similarity3::new(Vec3::new(-200., 0.0, 590.), Rotor3::identity(), 5.0),
+        trf: Similarity3::new(Vec3::new(-200., 0.0, 590.), Rotor3::from_rotation_xz(-std::f32::consts::FRAC_PI_2), 5.0),
         model: Rc::clone(&trophy),
+    };
+
+    let win_tex = engine.load_texture(std::path::Path::new("content/you_win.png"))?;
+    let win_meshes =
+        engine.load_textured(std::path::Path::new("content/floor.obj"))?;
+    let win = engine.create_textured_model(win_meshes, vec![win_tex]);
+    let rot = Rotor3::from_rotation_yz(-std::f32::consts::FRAC_PI_2);
+    let trf = Similarity3::new(Vec3::new(-1024.5, 1.0, 600.), rot, 1.0);
+    let win_texture = Textured {
+        trf,
+        model: Rc::clone(&win),
     };
 
     let tex = engine.load_texture(std::path::Path::new("content/robot.png"))?;
@@ -759,6 +783,7 @@ fn main() -> Result<()> {
         model: floor,
     }]);
     all_textureds.push(trophy_texture);
+    all_textureds.push(win_texture);
     // For testing purposes
 
     // let new_flat = Flat {
@@ -785,6 +810,7 @@ fn main() -> Result<()> {
             keys_grabbed: vec![],
             current_room: map.start_room_id,
             map,
+            game_won: false,
         },
         sprites: vec![],
         flats: flats_vec,
