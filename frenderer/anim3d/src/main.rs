@@ -13,6 +13,7 @@ use kira::{
     sound::SoundSettings,
     Tempo,
 };
+use russimp::AABB;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
@@ -53,14 +54,20 @@ struct Circle {
 }
 
 struct Wall {
-    wall: AABB2D,
-    door: Option<AABB2D>,
+    wall: Option<AABB2D>,
 }
 
 impl fmt::Debug for Wall {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Wall")
-            .field("wall_pos", &self.wall.center)
+            .field(
+                "wall_pos",
+                if let Some(r) = &self.wall {
+                    &r.center
+                } else {
+                    &self.wall
+                },
+            )
             .finish()
     }
 }
@@ -71,20 +78,13 @@ struct AABB2D {
     disp_mult: f32,
 }
 
-fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
-    // let x_disp = r.half_widths.x + c.radius - (c.center.x - r.center.x).abs();
-    // let z_disp = r.half_widths.y + c.radius - (c.center.y - r.center.y).abs();
-    // if x_disp > 0.0 || z_disp > 0.0 {
-    //     if x_disp < z_disp {
-    //         Some(Vec3::new(x_disp, 0.0, 0.))
-    //     } else {
-    //         Some(Vec3::new(0., 0., z_disp))
-    //     }
-    // } else {
-    //     // println!("not displaced");
-    //     None
-    // }
+impl fmt::Debug for AABB2D {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AABB2D").field("pos", &self.center).finish()
+    }
+}
 
+fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
     let x = c
         .center
         .x
@@ -124,40 +124,6 @@ fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
     } else {
         None
     }
-
-    // let x_disp = r.half_widths.x + c.radius - (c.center.x - r.center.x).abs();
-    // let z_disp = r.half_widths.y + c.radius - (c.center.y - r.center.y).abs();
-    // if x_disp > 0.0 || z_disp > 0.0 {
-    //     Some(Vec3::new(x_disp, 0., z_disp))
-    // } else {
-    //     println!("not displaced");
-    //     None
-    // }
-
-    // let x = c
-    //     .center
-    //     .x
-    //     .clamp(r.center.x - r.half_widths.x, r.center.x + r.half_widths.x);
-
-    // let y = c
-    //     .center
-    //     .y
-    //     .clamp(r.center.y - r.half_widths.y, r.center.y + r.half_widths.y);
-
-    // let closest_pt = Vec2::new(x, y);
-    // let actual_distance = (closest_pt - c.center).abs();
-    // let overlap_dist = (r.center - c.center).abs();
-    // let min_dist = r.half_widths + Vec2::new(c.radius, c.radius);
-
-    // if (actual_distance - min_dist).x > 0. || (actual_distance - min_dist).y > 0. {
-    //     // let disp = distance * (r.center - c.center).normalized();
-    //     // Some(Vec3::new(0., 0., 1.))
-    //     println!("displaced");
-    //     None
-    // } else {
-    //     println!("not displaced");
-    //     None
-    // }
 }
 
 pub struct Player {
@@ -173,10 +139,10 @@ impl Player {
 
         let curr_pos = self.object.trf.translation;
 
-
         self.find_current_room();
 
         if self.current_room == 5 {
+            println!("\n \n \n \n YOU WIN!!! \n \n \n \n ");
             return;
         }
         // dbg!(curr_pos);
@@ -209,7 +175,6 @@ impl Player {
                 println!("not enough elements!");
             }
         }
-
 
         // dbg!(&self.map.room_keys.get(&self.current_room).unwrap());
         // dbg!(textureds);
@@ -518,6 +483,7 @@ impl frenderer::World for World {
             .trf
             .prepend_translation(Vec3::new(move_x * 100.0, 0., move_z * 100.0));
 
+        //use this to only check collisions w walls around the player
         // for wall_idx in self
         //     .player
         //     .map
@@ -527,26 +493,16 @@ impl frenderer::World for World {
         //     .flats
         // {
         for (wall_idx, wall) in self.player.map.walls.iter().enumerate() {
-            //use this to only check collisions w walls around the player
-
-            // if wall_idx > 0 {
-            //     continue;
-            // }
-            // dbg!(&self.player.map.walls[wall_idx]);
-            // dbg!(&self.player.map.walls[wall_idx].wall.center);
-            // dbg!(player_shape.center);
-            // dbg!(player.trf.translation);
-            // dbg!(wall);
-            // dbg!(&self.flats[wall_idx]);
-
-            if let Some(disp) = displacement(player_shape, &self.player.map.walls[wall_idx].wall) {
-                // dbg!(&wall_idx, "displaced");
-                // println!("\n\n\n\n\n\n displaced \n\n\\n\n\n");
-                // panic!("displaced");
-                // dbg!(&disp);
-                let scaled_disp = disp / player.trf.scale;
-                // dbg!(&scaled_disp);
-                player.trf.translation += scaled_disp;
+            if let Some(r) = &wall.wall {
+                if let Some(disp) = displacement(player_shape, &r) {
+                    // dbg!(&wall_idx, "displaced");
+                    // println!("\n\n\n\n\n\n displaced \n\n\\n\n\n");
+                    // panic!("displaced");
+                    // dbg!(&disp);
+                    let scaled_disp = disp / player.trf.scale;
+                    // dbg!(&scaled_disp);
+                    player.trf.translation += scaled_disp;
+                }
             }
         }
 
@@ -590,6 +546,8 @@ impl frenderer::World for World {
             let mut rendered = false;
             for key in self.player.keys_grabbed.iter_mut() {
                 if key.opens_wallid.eq(&m_i) {
+                    //also change the wall vec to be none for this one
+                    self.player.map.walls[m_i].wall = None;
                     rs.render_flat(m.open_model.clone(), m.trf, m_i);
                     rendered = true;
                     break;
@@ -711,18 +669,19 @@ fn main() -> Result<()> {
         let y = -15.0;
         let z = flat["z"].as_f64().unwrap() as f32;
 
-        let mut door_needed = true;
+        let mut wall = false;
 
         let model = {
             if flat["door"].as_i64().unwrap() as i32 == 0 {
                 // Wall model without a door
+                wall = true;
                 wall_no_door_model.clone()
             } else if flat["door"].as_i64().unwrap() as i32 == 1 {
                 // Wall model with an open door
                 wall_with_door_opened_model.clone()
             } else if flat["door"].as_i64().unwrap() as i32 == 2 {
                 // Wall model with a locked door
-                door_needed = false;
+                wall = true;
                 wall_with_door_closed_model.clone()
             } else {
                 panic!("Invalid value for specification of wall.")
@@ -738,30 +697,18 @@ fn main() -> Result<()> {
 
         let disp_mult = if i == 0 || i == 2 { 1.0 } else { -1.0 };
 
-        let wall_coll = AABB2D {
-            center: Vec2::new(trf.translation.x, trf.translation.z) - FIX,
-            half_widths: half_widths_wall,
-            disp_mult,
+        let mut wall_coll = if wall {
+            Some(AABB2D {
+                center: Vec2::new(trf.translation.x, trf.translation.z) - FIX,
+                half_widths: half_widths_wall,
+                disp_mult,
+            })
+        } else {
+            None
         };
         // dbg!(trf);
-        let mut door_coll = None;
-        if door_needed {
-            let half_widths_door = if rotate {
-                Vec2::new(DOOR_WIDTH / 2., WALL_THICKNESS / 2.)
-            } else {
-                Vec2::new(WALL_THICKNESS / 2., DOOR_WIDTH / 2.)
-            };
-            door_coll = Some(AABB2D {
-                center: Vec2::new(trf.translation.x, trf.translation.z),
-                half_widths: half_widths_door,
-                disp_mult: 1.0,
-            });
-        }
 
-        let new_wall = Wall {
-            wall: wall_coll,
-            door: door_coll,
-        };
+        let new_wall = Wall { wall: wall_coll };
 
         let new_flat = Flat {
             trf,
@@ -856,7 +803,6 @@ fn main() -> Result<()> {
     //         LoopArrangementSettings::default(),
     // )).unwrap();
     // arrangement_handle.play(InstanceSettings::default()).unwrap();
-
 
     engine.play(world)
 }
