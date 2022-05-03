@@ -24,7 +24,7 @@ const GRAB_THRESHOLD: f32 = 100.0;
 
 const WALL_WIDTH: f32 = 3.0; //x
 const WALL_HEIGHT: f32 = 1.0 * 100.0; //y
-const WALL_THICKNESS: f32 = 0.1; //z
+const WALL_THICKNESS: f32 = 0.1 * 100.; //z
 
 const DOOR_WIDTH: f32 = 0.3 * 100.0;
 const DOOR_HEIGHT: f32 = 0.7 * 100.0;
@@ -55,9 +55,18 @@ struct Wall {
     door: Option<AABB2D>,
 }
 
+impl fmt::Debug for Wall {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Wall")
+            .field("wall_pos", &self.wall.center)
+            .finish()
+    }
+}
+
 struct AABB2D {
     center: Vec2,
     half_widths: Vec2,
+    disp_mult: f32,
 }
 
 fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
@@ -96,10 +105,15 @@ fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
         let x_disp = r.half_widths.x + c.radius - (c.center.x - r.center.x).abs();
         let z_disp = r.half_widths.y + c.radius - (c.center.y - r.center.y).abs();
 
+        // let mut mult = 1.0;
+        // if c.center.x < r.center.x || c.center.y < r.center.y {
+        //     mult = -1.0;
+        // }
+
         if x_disp < z_disp {
-            Some(Vec3::new(x_disp, 0.0, 0.))
+            Some(Vec3::new(x_disp, 0.0, 0.) * r.disp_mult)
         } else {
-            Some(Vec3::new(0., 0., z_disp))
+            Some(Vec3::new(0., 0., z_disp) * r.disp_mult)
         }
 
         // let x = mtv.x;
@@ -195,7 +209,7 @@ impl Player {
             center: Vec2::new(self.object.trf.translation.x, self.object.trf.translation.z)
                 * self.object.trf.scale
                 * 10.,
-            radius: 0.1,
+            radius: 0.01,
         }
     }
 
@@ -424,6 +438,14 @@ pub struct Flat {
     trf: Similarity3,
     model: Rc<frenderer::renderer::flat::Model>,
 }
+
+impl fmt::Debug for Flat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Flat")
+            .field("pos", &self.trf.translation)
+            .finish()
+    }
+}
 pub struct Textured {
     trf: Similarity3,
     model: Rc<frenderer::renderer::textured::Model>,
@@ -487,23 +509,26 @@ impl frenderer::World for World {
             .unwrap()
             .flats
         {
+            // for (wall_idx, wall) in self.player.map.walls.iter().enumerate() {
             //use this to only check collisions w walls around the player
 
             // if wall_idx > 0 {
             //     continue;
             // }
-
+            // dbg!(&self.player.map.walls[wall_idx]);
             // dbg!(&self.player.map.walls[wall_idx].wall.center);
             // dbg!(player_shape.center);
             // dbg!(player.trf.translation);
+            // dbg!(wall);
+            // dbg!(&self.flats[wall_idx]);
 
             if let Some(disp) = displacement(player_shape, &self.player.map.walls[wall_idx].wall) {
                 // dbg!(&wall_idx, "displaced");
                 // println!("\n\n\n\n\n\n displaced \n\n\\n\n\n");
                 // panic!("displaced");
-                dbg!(&disp);
+                // dbg!(&disp);
                 let scaled_disp = disp / player.trf.scale;
-                dbg!(&scaled_disp);
+                // dbg!(&scaled_disp);
                 player.trf.translation += scaled_disp;
             }
         }
@@ -644,7 +669,7 @@ fn main() -> Result<()> {
     let mut flats_vec: Vec<Flat> = vec![];
     let mut walls_vec: Vec<Wall> = vec![];
     let flats = json.get("flats").unwrap();
-    for flat in flats.as_array().unwrap().iter() {
+    for (i, flat) in flats.as_array().unwrap().iter().enumerate() {
         let mut rot = Rotor3::identity();
 
         //1.57079 Rust was complaining about this value. now is std::f32::consts::FRAC_PI_2
@@ -679,19 +704,22 @@ fn main() -> Result<()> {
 
         let trf = Similarity3::new(Vec3::new(x, y, z), rot, 100.);
         let half_widths_wall = if rotate {
-            Vec2::new(WALL_WIDTH / 2., WALL_THICKNESS / 2.) * (trf.scale)
+            Vec2::new(ROOM_WIDTH / 2., WALL_THICKNESS / 2.)
         } else {
-            Vec2::new(WALL_THICKNESS / 2., WALL_WIDTH / 2.) * (trf.scale)
+            Vec2::new(WALL_THICKNESS / 2., ROOM_LENGTH / 2.)
         };
+
+        let disp_mult = if i == 0 || i == 2 { 1.0 } else { -1.0 };
 
         let wall_coll = AABB2D {
             center: Vec2::new(trf.translation.x, trf.translation.z),
             half_widths: half_widths_wall,
+            disp_mult,
         };
-
+        // dbg!(trf);
         let mut door_coll = None;
         if door_needed {
-            let half_widths_door = if !rotate {
+            let half_widths_door = if rotate {
                 Vec2::new(DOOR_WIDTH / 2., WALL_THICKNESS / 2.)
             } else {
                 Vec2::new(WALL_THICKNESS / 2., DOOR_WIDTH / 2.)
@@ -699,6 +727,7 @@ fn main() -> Result<()> {
             door_coll = Some(AABB2D {
                 center: Vec2::new(trf.translation.x, trf.translation.z),
                 half_widths: half_widths_door,
+                disp_mult: 1.0,
             });
         }
 
