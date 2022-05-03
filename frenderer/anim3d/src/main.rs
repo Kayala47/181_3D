@@ -249,6 +249,9 @@ impl Player {
     }
 
     pub fn is_in_doorway(&self, world: &World) -> bool {
+        if self.game_won {
+            return false;
+        }
         let room_id = self.current_room;
         let room = self.map.rooms_list.get(&room_id).unwrap();
         let player_x = self.object.trf.translation.x;
