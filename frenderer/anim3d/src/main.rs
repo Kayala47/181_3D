@@ -5,12 +5,12 @@ use frenderer::assets::{AnimRef, Texture};
 use frenderer::camera::{Camera, FPCamera};
 use frenderer::renderer::textured::Model;
 use frenderer::types::*;
-use frenderer::{Engine, Key, Result, WindowSettings, MousePos};
+use frenderer::{Engine, Key, MousePos, Result, WindowSettings};
 use kira::{
-	manager::{AudioManager, AudioManagerSettings},
-    sound::{SoundSettings,},
-    arrangement::{LoopArrangementSettings, Arrangement},
-    instance::{InstanceSettings},
+    arrangement::{Arrangement, LoopArrangementSettings},
+    instance::InstanceSettings,
+    manager::{AudioManager, AudioManagerSettings},
+    sound::SoundSettings,
     Tempo,
 };
 use std::collections::HashMap;
@@ -47,33 +47,47 @@ impl Player {
         //checks if keys are nearby and grabs them
 
         let curr_pos = self.object.trf.translation;
-        dbg!(curr_pos);
+
+        self.find_current_room();
+
+        if self.current_room == 5 {
+            return;
+        }
+        // dbg!(curr_pos);
 
         //two steps: filter out the ones that match first, then actually pick them up
 
-        let keys = self.map.room_keys.get_mut(&self.current_room).unwrap();
-
         let mut tex_iter = textureds.iter();
 
-        if let Some(pos) = tex_iter.position(|t| {
+        if let Some(mut pos) = tex_iter.position(|t| {
             let textured_pos = t.trf.translation;
             distance(curr_pos, textured_pos) < GRAB_THRESHOLD
         }) {
             println!("attempting to grab something");
 
-            if pos < keys.len() && pos < textureds.len() - 1 {
+            let og_pos = pos;
+
+            for i in 0 as usize..self.current_room {
+                pos -= self.map.room_keys.get(&i).unwrap().len();
+            }
+
+            let keys = self.map.room_keys.get_mut(&self.current_room).unwrap();
+            dbg!(&keys);
+
+            if pos < keys.len() && pos < textureds.len() - 2 {
                 let key = keys.remove(pos);
                 key.pick_up(self);
 
-                textureds.remove(pos);
+                textureds.remove(og_pos);
             } else {
                 println!("not enough elements!");
             }
         }
 
-        dbg!(&self.map.room_keys.get(&self.current_room).unwrap());
-        dbg!(textureds);
-        dbg!(&self.keys_grabbed);
+        dbg!(&self);
+        // dbg!(&self.map.room_keys.get(&self.current_room).unwrap());
+        // dbg!(textureds);
+        // dbg!(&self.keys_grabbed);
     }
 
     pub fn change_room(&mut self, new_roomid: usize) {
@@ -357,7 +371,7 @@ impl frenderer::World for World {
         self.fp_camera
             .update(&input, player.trf.translation, player.trf.rotation);
         self.fp_camera.update_camera(&mut self.camera);
-    
+
         for _s in self.sprites.iter_mut() {
             //s.trf.append_rotation(rot);
             //s.size.x += dscale;
@@ -399,10 +413,9 @@ impl frenderer::World for World {
                     break;
                 }
             }
-            if !rendered{
+            if !rendered {
                 rs.render_flat(m.model.clone(), m.trf, m_i);
             }
-            
         }
         for (t_i, t) in self.textured.iter_mut().enumerate() {
             rs.render_textured(t.model.clone(), t.trf, t_i);
@@ -438,13 +451,14 @@ fn main() -> Result<()> {
         engine.load_flat(std::path::Path::new("content/walls/wall_no_door.glb"))?;
 
     let trophy_tex = engine.load_texture(std::path::Path::new("content/gold-trophy.png"))?;
-    let trophy_meshes = engine.load_textured(std::path::Path::new("content/trophyobjectfile.obj"))?;
+    let trophy_meshes =
+        engine.load_textured(std::path::Path::new("content/trophyobjectfile.obj"))?;
     let trophy = engine.create_textured_model(trophy_meshes, vec![trophy_tex, trophy_tex]);
     let trophy_texture = Textured {
         trf: Similarity3::new(Vec3::new(-200., 0.0, 590.), Rotor3::identity(), 5.0),
         model: Rc::clone(&trophy),
     };
-    
+
     let tex = engine.load_texture(std::path::Path::new("content/robot.png"))?;
     let meshes = engine.load_skinned(
         std::path::Path::new("content/characterSmall.fbx"),
@@ -529,7 +543,7 @@ fn main() -> Result<()> {
         let new_flat = Flat {
             trf: Similarity3::new(Vec3::new(x, y, z), rot, 100.),
             model: model.clone(),
-            open_model: wall_with_door_opened_model.clone()
+            open_model: wall_with_door_opened_model.clone(),
         };
         flats_vec.push(new_flat);
     }
@@ -551,8 +565,11 @@ fn main() -> Result<()> {
         Similarity3::new(Vec3::new(110.0, 0., 563.0), key_rot, 2.),
     ];
 
-    let (keys, mut key_textureds) =
-        multiple_key_pairs(key_positions, key, vec![(0, 1), (0, 3), (1,6), (2,8), (3,11), (4,13)]);
+    let (keys, mut key_textureds) = multiple_key_pairs(
+        key_positions,
+        key,
+        vec![(0, 1), (0, 3), (1, 6), (2, 8), (3, 11), (4, 13)],
+    );
 
     map.add_mult_keys(keys);
 
@@ -603,16 +620,16 @@ fn main() -> Result<()> {
     };
 
     // load and play background music
-    let mut audio_manager = AudioManager::new(AudioManagerSettings::default()).unwrap();
-    let sound_handle = audio_manager.load_sound(
-            "content/background.mp3",
-            SoundSettings::new().semantic_duration(Tempo(128.0).beats_to_seconds(8.0)),
-    ).unwrap();
-    let mut arrangement_handle = audio_manager.add_arrangement(Arrangement::new_loop(
-            &sound_handle,
-            LoopArrangementSettings::default(),
-    )).unwrap();
-    arrangement_handle.play(InstanceSettings::default()).unwrap();
+    // let mut audio_manager = AudioManager::new(AudioManagerSettings::default()).unwrap();
+    // let sound_handle = audio_manager.load_sound(
+    //         "content/background.mp3",
+    //         SoundSettings::new().semantic_duration(Tempo(128.0).beats_to_seconds(8.0)),
+    // ).unwrap();
+    // let mut arrangement_handle = audio_manager.add_arrangement(Arrangement::new_loop(
+    //         &sound_handle,
+    //         LoopArrangementSettings::default(),
+    // )).unwrap();
+    // arrangement_handle.play(InstanceSettings::default()).unwrap();
 
     engine.play(world)
 }
