@@ -5,12 +5,12 @@ use frenderer::assets::{AnimRef, Texture};
 use frenderer::camera::{Camera, FPCamera};
 use frenderer::renderer::textured::Model;
 use frenderer::types::*;
-use frenderer::{Engine, Key, Result, WindowSettings, MousePos};
+use frenderer::{Engine, Key, MousePos, Result, WindowSettings};
 use kira::{
-	manager::{AudioManager, AudioManagerSettings},
-    sound::{SoundSettings,},
-    arrangement::{LoopArrangementSettings, Arrangement},
-    instance::{InstanceSettings},
+    arrangement::{Arrangement, LoopArrangementSettings},
+    instance::InstanceSettings,
+    manager::{AudioManager, AudioManagerSettings},
+    sound::SoundSettings,
     Tempo,
 };
 use std::collections::HashMap;
@@ -61,18 +61,75 @@ struct AABB2D {
 }
 
 fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
-    let x_disp = r.half_widths.x + c.radius - (c.center.x - r.center.x).abs();
-    let z_disp = r.half_widths.y + c.radius - (c.center.y - r.center.y).abs();
-    if x_disp > 0.0 || z_disp > 0.0 {
-        if x_disp < z_disp {
-            Some(Vec3::new(x_disp, 0.0, 0.))
-        } else {
-            Some(Vec3::new(0.,0., z_disp ))
-        }
-    }
-    else{
+    // let x_disp = r.half_widths.x + c.radius - (c.center.x - r.center.x).abs();
+    // let z_disp = r.half_widths.y + c.radius - (c.center.y - r.center.y).abs();
+    // if x_disp > 0.0 || z_disp > 0.0 {
+    //     if x_disp < z_disp {
+    //         Some(Vec3::new(x_disp, 0.0, 0.))
+    //     } else {
+    //         Some(Vec3::new(0., 0., z_disp))
+    //     }
+    // } else {
+    //     println!("not displaced");
+    //     None
+    // }
+
+    let x = c
+        .center
+        .x
+        .clamp(r.center.x - r.half_widths.x, r.center.x + r.half_widths.x);
+    let y = c
+        .center
+        .y
+        .clamp(r.center.y - r.half_widths.y, r.center.y + r.half_widths.y);
+
+    let closest_pt = Vec2::new(x, y);
+
+    if (closest_pt - c.center).mag() <= c.radius {
+        //collision!
+
+        // let lt_disp = (c.center.x + c.radius) - (rect.center.x - rect.half_widths.x);
+        // let rt_disp = (r.center.x + r.half_widths.x) - (c.center.x - c.radius);
+
+        let mtv = (closest_pt - c.center).normalized() * (c.radius - closest_pt.mag());
+        Some(Vec3::new(mtv.x, 0., mtv.y))
+    } else {
         None
     }
+
+    // let x_disp = r.half_widths.x + c.radius - (c.center.x - r.center.x).abs();
+    // let z_disp = r.half_widths.y + c.radius - (c.center.y - r.center.y).abs();
+    // if x_disp > 0.0 || z_disp > 0.0 {
+    //     Some(Vec3::new(x_disp, 0., z_disp))
+    // } else {
+    //     println!("not displaced");
+    //     None
+    // }
+
+    // let x = c
+    //     .center
+    //     .x
+    //     .clamp(r.center.x - r.half_widths.x, r.center.x + r.half_widths.x);
+
+    // let y = c
+    //     .center
+    //     .y
+    //     .clamp(r.center.y - r.half_widths.y, r.center.y + r.half_widths.y);
+
+    // let closest_pt = Vec2::new(x, y);
+    // let actual_distance = (closest_pt - c.center).abs();
+    // let overlap_dist = (r.center - c.center).abs();
+    // let min_dist = r.half_widths + Vec2::new(c.radius, c.radius);
+
+    // if (actual_distance - min_dist).x > 0. || (actual_distance - min_dist).y > 0. {
+    //     // let disp = distance * (r.center - c.center).normalized();
+    //     // Some(Vec3::new(0., 0., 1.))
+    //     println!("displaced");
+    //     None
+    // } else {
+    //     println!("not displaced");
+    //     None
+    // }
 }
 
 pub struct Player {
@@ -121,8 +178,10 @@ impl Player {
     }
 
     fn shape(&self) -> Circle {
+        dbg!(&self.object.trf.translation.x);
         Circle {
-            center: Vec2::new(self.object.trf.translation.x, self.object.trf.translation.z),
+            center: Vec2::new(self.object.trf.translation.x, self.object.trf.translation.z)
+                * self.object.trf.scale,
             radius: PLAYER_HEIGHT / 2.,
         }
     }
@@ -403,24 +462,31 @@ impl frenderer::World for World {
 
         player.trf.prepend_rotation(rot);
 
-        
         player
             .trf
             .prepend_translation(Vec3::new(move_x * 100.0, 0., move_z * 100.0));
 
-
-        for wall_idx in self.player.map.rooms_list.get(&self.player.current_room).unwrap().flats{
+        for wall_idx in self
+            .player
+            .map
+            .rooms_list
+            .get(&self.player.current_room)
+            .unwrap()
+            .flats
+        {
             //use this to only check collisions w walls around the player
+            dbg!(&self.player.map.walls[wall_idx].wall.center);
 
-            if let Some(disp) = displacement(player_shape, &self.player.map.walls[wall_idx].wall){
+            if wall_idx > 0 {
+                continue;
+            }
 
-                println!("hit the wall");
+            if let Some(disp) = displacement(player_shape, &self.player.map.walls[wall_idx].wall) {
+                dbg!(&wall_idx, "displaced");
                 // player.trf.translation -= disp;
-
             }
             continue;
         }
-        
 
         self.fp_camera
             .update(&input, player.trf.translation, player.trf.rotation);
@@ -495,13 +561,14 @@ fn main() -> Result<()> {
         engine.load_flat(std::path::Path::new("content/walls/wall_no_door.glb"))?;
 
     let trophy_tex = engine.load_texture(std::path::Path::new("content/gold-trophy.png"))?;
-    let trophy_meshes = engine.load_textured(std::path::Path::new("content/trophyobjectfile.obj"))?;
+    let trophy_meshes =
+        engine.load_textured(std::path::Path::new("content/trophyobjectfile.obj"))?;
     let trophy = engine.create_textured_model(trophy_meshes, vec![trophy_tex, trophy_tex]);
     let trophy_texture = Textured {
         trf: Similarity3::new(Vec3::new(-200., 0.0, 590.), Rotor3::identity(), 5.0),
         model: Rc::clone(&trophy),
     };
-    
+
     let tex = engine.load_texture(std::path::Path::new("content/robot.png"))?;
     let meshes = engine.load_skinned(
         std::path::Path::new("content/characterSmall.fbx"),
@@ -591,7 +658,11 @@ fn main() -> Result<()> {
         };
 
         let trf = Similarity3::new(Vec3::new(x, y, z), rot, 100.);
-        let half_widths_wall = if !rotate {Vec2::new(WALL_WIDTH/2., WALL_THICKNESS/2.) } else {Vec2::new(WALL_THICKNESS/2., WALL_WIDTH/2.)};
+        let half_widths_wall = if !rotate {
+            Vec2::new(WALL_WIDTH / 2., WALL_THICKNESS / 2.)
+        } else {
+            Vec2::new(WALL_THICKNESS / 2., WALL_WIDTH / 2.)
+        };
 
         let wall_coll = AABB2D {
             center: Vec2::new(trf.translation.x, trf.translation.z),
@@ -600,13 +671,15 @@ fn main() -> Result<()> {
 
         let mut door_coll = None;
         if door_needed {
-            let half_widths_door = if !rotate {Vec2::new(DOOR_WIDTH/2., WALL_THICKNESS/2.) } 
-            else {Vec2::new(WALL_THICKNESS/2., DOOR_WIDTH/2.)}; 
+            let half_widths_door = if !rotate {
+                Vec2::new(DOOR_WIDTH / 2., WALL_THICKNESS / 2.)
+            } else {
+                Vec2::new(WALL_THICKNESS / 2., DOOR_WIDTH / 2.)
+            };
             door_coll = Some(AABB2D {
                 center: Vec2::new(trf.translation.x, trf.translation.z),
                 half_widths: half_widths_door,
             });
-            
         }
 
         let new_wall = Wall {
@@ -690,15 +763,21 @@ fn main() -> Result<()> {
 
     // load and play background music
     let mut audio_manager = AudioManager::new(AudioManagerSettings::default()).unwrap();
-    let sound_handle = audio_manager.load_sound(
+    let sound_handle = audio_manager
+        .load_sound(
             "content/background.mp3",
             SoundSettings::new().semantic_duration(Tempo(128.0).beats_to_seconds(8.0)),
-    ).unwrap();
-    let mut arrangement_handle = audio_manager.add_arrangement(Arrangement::new_loop(
+        )
+        .unwrap();
+    let mut arrangement_handle = audio_manager
+        .add_arrangement(Arrangement::new_loop(
             &sound_handle,
             LoopArrangementSettings::default(),
-    )).unwrap();
-    arrangement_handle.play(InstanceSettings::default()).unwrap();
+        ))
+        .unwrap();
+    arrangement_handle
+        .play(InstanceSettings::default())
+        .unwrap();
 
     engine.play(world)
 }
