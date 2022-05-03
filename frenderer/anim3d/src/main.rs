@@ -60,6 +60,31 @@ struct AABB2D {
     half_widths: Vec2,
 }
 
+// Find collision given the player's x and z coordinates and current_room.
+pub fn handle_collision(player: &mut Player) {
+    // find current room
+    player.find_current_room();
+    let current_room = player.map.rooms_list.get(&player.current_room).unwrap();
+    let player_x = player.object.trf.translation.x;
+    let player_z = player.object.trf.translation.z;
+    let room_bottom_left_corner_x = current_room.bottom_left_corner[0];
+    let room_bottom_left_corner_z = current_room.bottom_left_corner[1];
+    // check for any overlaps
+    if player_x > room_bottom_left_corner_x + ROOM_WIDTH {
+        player.object.trf.translation.x = room_bottom_left_corner_x + ROOM_WIDTH - 2.;
+    }
+    if player_z > room_bottom_left_corner_z + ROOM_LENGTH {
+        player.object.trf.translation.z = room_bottom_left_corner_z + ROOM_LENGTH - 2.;
+    }
+    if player_x < room_bottom_left_corner_x {
+        player.object.trf.translation.x = room_bottom_left_corner_x + 2.;
+    }
+    if player_z < room_bottom_left_corner_z {
+        player.object.trf.translation.z = room_bottom_left_corner_z + 2.;
+    }
+    // update player's coordinates accordingly
+}
+
 fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
     // let x_disp = r.half_widths.x + c.radius - (c.center.x - r.center.x).abs();
     // let z_disp = r.half_widths.y + c.radius - (c.center.y - r.center.y).abs();
@@ -466,27 +491,52 @@ impl frenderer::World for World {
             .trf
             .prepend_translation(Vec3::new(move_x * 100.0, 0., move_z * 100.0));
 
-        for wall_idx in self
+        // find current room
+        let current_room = self
             .player
             .map
             .rooms_list
             .get(&self.player.current_room)
-            .unwrap()
-            .flats
-        {
-            //use this to only check collisions w walls around the player
-            dbg!(&self.player.map.walls[wall_idx].wall.center);
-
-            if wall_idx > 0 {
-                continue;
-            }
-
-            if let Some(disp) = displacement(player_shape, &self.player.map.walls[wall_idx].wall) {
-                dbg!(&wall_idx, "displaced");
-                // player.trf.translation -= disp;
-            }
-            continue;
+            .unwrap();
+        let player_x = player.trf.translation.x;
+        let player_z = player.trf.translation.z;
+        let room_bottom_left_corner_x = current_room.bottom_left_corner[0];
+        let room_bottom_left_corner_z = current_room.bottom_left_corner[1];
+        // check for any overlaps
+        if player_x > room_bottom_left_corner_x + ROOM_WIDTH - 10. {
+            player.trf.translation.x = room_bottom_left_corner_x + ROOM_WIDTH - 10.;
         }
+        if player_z > room_bottom_left_corner_z + ROOM_LENGTH - 10. {
+            player.trf.translation.z = room_bottom_left_corner_z + ROOM_LENGTH - 10.;
+        }
+        if player_x < room_bottom_left_corner_x + 10. {
+            player.trf.translation.x = room_bottom_left_corner_x + 10.;
+        }
+        if player_z < room_bottom_left_corner_z + 10. {
+            player.trf.translation.z = room_bottom_left_corner_z + 10.;
+        }
+        // update player's coordinates accordingly
+        // for wall_idx in self
+        //     .player
+        //     .map
+        //     .rooms_list
+        //     .get(&self.player.current_room)
+        //     .unwrap()
+        //     .flats
+        // {
+        //     //use this to only check collisions w walls around the player
+        //     dbg!(&self.player.map.walls[wall_idx].wall.center);
+
+        //     if wall_idx > 0 {
+        //         continue;
+        //     }
+
+        //     if let Some(disp) = displacement(player_shape, &self.player.map.walls[wall_idx].wall) {
+        //         dbg!(&wall_idx, "displaced");
+        //         // player.trf.translation -= disp;
+        //     }
+        //     continue;
+        // }
 
         self.fp_camera
             .update(&input, player.trf.translation, player.trf.rotation);
