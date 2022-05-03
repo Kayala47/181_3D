@@ -42,6 +42,8 @@ const ROOM_LENGTH: f32 = 295.0;
 
 const PLAYER_HEIGHT: f32 = WALL_HEIGHT / 2.;
 
+const FIX: Vec2 = Vec2::new(45.0, 45.0);
+
 //let's call this the radius of each
 const COLLIS_THRESHHOLD: f32 = (WALL_WIDTH / 2.) + (PLAYER_HEIGHT / 2.);
 
@@ -501,15 +503,15 @@ impl frenderer::World for World {
             .trf
             .prepend_translation(Vec3::new(move_x * 100.0, 0., move_z * 100.0));
 
-        for wall_idx in self
-            .player
-            .map
-            .rooms_list
-            .get(&self.player.current_room)
-            .unwrap()
-            .flats
-        {
-            // for (wall_idx, wall) in self.player.map.walls.iter().enumerate() {
+        // for wall_idx in self
+        //     .player
+        //     .map
+        //     .rooms_list
+        //     .get(&self.player.current_room)
+        //     .unwrap()
+        //     .flats
+        // {
+        for (wall_idx, wall) in self.player.map.walls.iter().enumerate() {
             //use this to only check collisions w walls around the player
 
             // if wall_idx > 0 {
@@ -712,7 +714,7 @@ fn main() -> Result<()> {
         let disp_mult = if i == 0 || i == 2 { 1.0 } else { -1.0 };
 
         let wall_coll = AABB2D {
-            center: Vec2::new(trf.translation.x, trf.translation.z),
+            center: Vec2::new(trf.translation.x, trf.translation.z) - FIX,
             half_widths: half_widths_wall,
             disp_mult,
         };
