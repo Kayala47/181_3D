@@ -728,7 +728,7 @@ fn main() -> Result<()> {
         engine.load_textured(std::path::Path::new("content/trophyobjectfile.obj"))?;
     let trophy = engine.create_textured_model(trophy_meshes, vec![trophy_tex, trophy_tex]);
     let trophy_texture = Textured {
-        trf: Similarity3::new(Vec3::new(-200., 0.0, 590.), Rotor3::from_rotation_xz(-std::f32::consts::FRAC_PI_2), 5.0),
+        trf: Similarity3::new(Vec3::new(-200., 0.0, 610.), Rotor3::from_rotation_xz(-std::f32::consts::FRAC_PI_2), 5.0),
         model: Rc::clone(&trophy),
     };
 
