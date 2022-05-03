@@ -22,9 +22,9 @@ const DT: f64 = 1.0 / 60.0;
 
 const GRAB_THRESHOLD: f32 = 100.0;
 
-const WALL_WIDTH: f32 = 3.0 * 100.0; //x
+const WALL_WIDTH: f32 = 3.0; //x
 const WALL_HEIGHT: f32 = 1.0 * 100.0; //y
-const WALL_THICKNESS: f32 = 0.1 * 100.0; //z
+const WALL_THICKNESS: f32 = 0.1; //z
 
 const DOOR_WIDTH: f32 = 0.3 * 100.0;
 const DOOR_HEIGHT: f32 = 0.7 * 100.0;
@@ -70,7 +70,7 @@ fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
     //         Some(Vec3::new(0., 0., z_disp))
     //     }
     // } else {
-    //     println!("not displaced");
+    //     // println!("not displaced");
     //     None
     // }
 
@@ -84,6 +84,8 @@ fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
         .clamp(r.center.y - r.half_widths.y, r.center.y + r.half_widths.y);
 
     let closest_pt = Vec2::new(x, y);
+    // let mtv = (closest_pt - c.center).normalized() * (c.radius - closest_pt.mag());
+    // dbg!(&mtv);
 
     if (closest_pt - c.center).mag() <= c.radius {
         //collision!
@@ -91,8 +93,18 @@ fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
         // let lt_disp = (c.center.x + c.radius) - (rect.center.x - rect.half_widths.x);
         // let rt_disp = (r.center.x + r.half_widths.x) - (c.center.x - c.radius);
 
-        let mtv = (closest_pt - c.center).normalized() * (c.radius - closest_pt.mag());
-        Some(Vec3::new(mtv.x, 0., mtv.y))
+        let x_disp = r.half_widths.x + c.radius - (c.center.x - r.center.x).abs();
+        let z_disp = r.half_widths.y + c.radius - (c.center.y - r.center.y).abs();
+
+        if x_disp < z_disp {
+            Some(Vec3::new(x_disp, 0.0, 0.))
+        } else {
+            Some(Vec3::new(0., 0., z_disp))
+        }
+
+        // let x = mtv.x;
+        // let y = mtv.y;
+        // Some(Vec3::new(x, 0., y))
     } else {
         None
     }
@@ -144,7 +156,7 @@ impl Player {
         //checks if keys are nearby and grabs them
 
         let curr_pos = self.object.trf.translation;
-        dbg!(curr_pos);
+        // dbg!(curr_pos);
 
         //two steps: filter out the ones that match first, then actually pick them up
 
@@ -168,9 +180,9 @@ impl Player {
             }
         }
 
-        dbg!(&self.map.room_keys.get(&self.current_room).unwrap());
-        dbg!(textureds);
-        dbg!(&self.keys_grabbed);
+        // dbg!(&self.map.room_keys.get(&self.current_room).unwrap());
+        // dbg!(textureds);
+        // dbg!(&self.keys_grabbed);
     }
 
     pub fn change_room(&mut self, new_roomid: usize) {
@@ -178,11 +190,12 @@ impl Player {
     }
 
     fn shape(&self) -> Circle {
-        dbg!(&self.object.trf.translation.x);
+        // dbg!(&self.object.trf.translation.x);
         Circle {
             center: Vec2::new(self.object.trf.translation.x, self.object.trf.translation.z)
-                * self.object.trf.scale,
-            radius: PLAYER_HEIGHT / 2.,
+                * self.object.trf.scale
+                * 10.,
+            radius: 0.1,
         }
     }
 
@@ -475,17 +488,24 @@ impl frenderer::World for World {
             .flats
         {
             //use this to only check collisions w walls around the player
-            dbg!(&self.player.map.walls[wall_idx].wall.center);
 
-            if wall_idx > 0 {
-                continue;
-            }
+            // if wall_idx > 0 {
+            //     continue;
+            // }
+
+            // dbg!(&self.player.map.walls[wall_idx].wall.center);
+            // dbg!(player_shape.center);
+            // dbg!(player.trf.translation);
 
             if let Some(disp) = displacement(player_shape, &self.player.map.walls[wall_idx].wall) {
-                dbg!(&wall_idx, "displaced");
-                // player.trf.translation -= disp;
+                // dbg!(&wall_idx, "displaced");
+                // println!("\n\n\n\n\n\n displaced \n\n\\n\n\n");
+                // panic!("displaced");
+                dbg!(&disp);
+                let scaled_disp = disp / player.trf.scale;
+                dbg!(&scaled_disp);
+                player.trf.translation += scaled_disp;
             }
-            continue;
         }
 
         self.fp_camera
@@ -658,10 +678,10 @@ fn main() -> Result<()> {
         };
 
         let trf = Similarity3::new(Vec3::new(x, y, z), rot, 100.);
-        let half_widths_wall = if !rotate {
-            Vec2::new(WALL_WIDTH / 2., WALL_THICKNESS / 2.)
+        let half_widths_wall = if rotate {
+            Vec2::new(WALL_WIDTH / 2., WALL_THICKNESS / 2.) * (trf.scale)
         } else {
-            Vec2::new(WALL_THICKNESS / 2., WALL_WIDTH / 2.)
+            Vec2::new(WALL_THICKNESS / 2., WALL_WIDTH / 2.) * (trf.scale)
         };
 
         let wall_coll = AABB2D {
@@ -697,7 +717,7 @@ fn main() -> Result<()> {
     map.add_walls(walls_vec);
 
     let player_obj = GameObject {
-        trf: Similarity3::new(Vec3::new(-20.0, -15.0, -10.0), Rotor3::identity(), 0.1),
+        trf: Similarity3::new(Vec3::new(150.0, -15.0, 0.0), Rotor3::identity(), 0.1),
         model,
         animation,
         state: AnimationState { t: 0.0 },
@@ -762,22 +782,22 @@ fn main() -> Result<()> {
     };
 
     // load and play background music
-    let mut audio_manager = AudioManager::new(AudioManagerSettings::default()).unwrap();
-    let sound_handle = audio_manager
-        .load_sound(
-            "content/background.mp3",
-            SoundSettings::new().semantic_duration(Tempo(128.0).beats_to_seconds(8.0)),
-        )
-        .unwrap();
-    let mut arrangement_handle = audio_manager
-        .add_arrangement(Arrangement::new_loop(
-            &sound_handle,
-            LoopArrangementSettings::default(),
-        ))
-        .unwrap();
-    arrangement_handle
-        .play(InstanceSettings::default())
-        .unwrap();
+    // let mut audio_manager = AudioManager::new(AudioManagerSettings::default()).unwrap();
+    // let sound_handle = audio_manager
+    //     .load_sound(
+    //         "content/background.mp3",
+    //         SoundSettings::new().semantic_duration(Tempo(128.0).beats_to_seconds(8.0)),
+    //     )
+    //     .unwrap();
+    // let mut arrangement_handle = audio_manager
+    //     .add_arrangement(Arrangement::new_loop(
+    //         &sound_handle,
+    //         LoopArrangementSettings::default(),
+    //     ))
+    //     .unwrap();
+    // arrangement_handle
+    //     .play(InstanceSettings::default())
+    //     .unwrap();
 
     engine.play(world)
 }
