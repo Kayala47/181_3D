@@ -172,29 +172,44 @@ impl Player {
         //checks if keys are nearby and grabs them
 
         let curr_pos = self.object.trf.translation;
+
+
+        self.find_current_room();
+
+        if self.current_room == 5 {
+            return;
+        }
         // dbg!(curr_pos);
 
         //two steps: filter out the ones that match first, then actually pick them up
 
-        let keys = self.map.room_keys.get_mut(&self.current_room).unwrap();
-
         let mut tex_iter = textureds.iter();
 
-        if let Some(pos) = tex_iter.position(|t| {
+        if let Some(mut pos) = tex_iter.position(|t| {
             let textured_pos = t.trf.translation;
             distance(curr_pos, textured_pos) < GRAB_THRESHOLD
         }) {
             println!("attempting to grab something");
 
-            if pos < keys.len() && pos < textureds.len() - 1 {
+            let og_pos = pos;
+
+            for i in 0 as usize..self.current_room {
+                pos -= self.map.room_keys.get(&i).unwrap().len();
+            }
+
+            let keys = self.map.room_keys.get_mut(&self.current_room).unwrap();
+            dbg!(&keys);
+
+            if pos < keys.len() && pos < textureds.len() - 2 {
                 let key = keys.remove(pos);
                 key.pick_up(self);
 
-                textureds.remove(pos);
+                textureds.remove(og_pos);
             } else {
                 println!("not enough elements!");
             }
         }
+
 
         // dbg!(&self.map.room_keys.get(&self.current_room).unwrap());
         // dbg!(textureds);
@@ -260,14 +275,13 @@ impl Room {
 
 pub struct RoomKey {
     starts_roomid: usize, // the room that the key is in.
-    opens_roomid: usize,  // the room they open to
+    opens_wallid: usize,  // the wall they open to
     picked_up: bool,
 }
 impl RoomKey {
     pub fn pick_up(mut self, game_state: &mut Player) {
         self.picked_up = true;
         game_state.keys_grabbed.push(self);
-        //TODO: make it disappear   en
     }
 }
 
@@ -275,7 +289,7 @@ impl fmt::Debug for RoomKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RoomKey")
             .field("starts_roomid", &self.starts_roomid)
-            .field("opens_roomid", &self.opens_roomid)
+            .field("opens_wallid", &self.opens_wallid)
             .finish()
     }
 }
@@ -298,7 +312,7 @@ fn gen_key_pair(
 
     let key = RoomKey {
         starts_roomid: starts,
-        opens_roomid: opens,
+        opens_wallid: opens,
         picked_up: false,
     };
 
@@ -357,10 +371,10 @@ impl Map {
         );
     }
 
-    pub fn add_key(&mut self, starts_roomid: usize, opens_roomid: usize) {
+    pub fn add_key(&mut self, starts_roomid: usize, opens_wallid: usize) {
         let key = RoomKey {
             starts_roomid,
-            opens_roomid,
+            opens_wallid,
             picked_up: false,
         };
 
@@ -439,6 +453,7 @@ pub struct World {
 pub struct Flat {
     trf: Similarity3,
     model: Rc<frenderer::renderer::flat::Model>,
+    open_model: Rc<frenderer::renderer::flat::Model>,
 }
 
 impl fmt::Debug for Flat {
@@ -572,7 +587,17 @@ impl frenderer::World for World {
         let obj = &self.player.object;
         rs.render_skinned(obj.model.clone(), obj.animation, obj.state, obj.trf, 0);
         for (m_i, m) in self.flats.iter_mut().enumerate() {
-            rs.render_flat(m.model.clone(), m.trf, m_i);
+            let mut rendered = false;
+            for key in self.player.keys_grabbed.iter_mut() {
+                if key.opens_wallid.eq(&m_i) {
+                    rs.render_flat(m.open_model.clone(), m.trf, m_i);
+                    rendered = true;
+                    break;
+                }
+            }
+            if !rendered {
+                rs.render_flat(m.model.clone(), m.trf, m_i);
+            }
         }
         for (t_i, t) in self.textured.iter_mut().enumerate() {
             rs.render_textured(t.model.clone(), t.trf, t_i);
@@ -741,6 +766,7 @@ fn main() -> Result<()> {
         let new_flat = Flat {
             trf,
             model: model.clone(),
+            open_model: wall_with_door_opened_model.clone(),
         };
         flats_vec.push(new_flat);
         walls_vec.push(new_wall);
@@ -757,12 +783,18 @@ fn main() -> Result<()> {
     let key_rot = Rotor3::from_rotation_yz(std::f32::consts::FRAC_PI_2 * -1.);
     let key_positions = vec![
         Similarity3::new(Vec3::new(0.0, 0.0, -10.0), key_rot, 2.),
-        Similarity3::new(Vec3::new(10.0, 0.0, -10.0), key_rot, 2.),
-        Similarity3::new(Vec3::new(0.0, 10.0, -15.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(20.0, 0.0, -15.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(364.0, 0., 30.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(91.0, 0., 287.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(378., 0., 254.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(110.0, 0., 563.0), key_rot, 2.),
     ];
 
-    let (keys, mut key_textureds) =
-        multiple_key_pairs(key_positions, key, vec![(0, 1), (0, 2), (0, 3)]);
+    let (keys, mut key_textureds) = multiple_key_pairs(
+        key_positions,
+        key,
+        vec![(0, 1), (0, 3), (1, 6), (2, 8), (3, 11), (4, 13)],
+    );
 
     map.add_mult_keys(keys);
 
@@ -814,21 +846,17 @@ fn main() -> Result<()> {
 
     // load and play background music
     // let mut audio_manager = AudioManager::new(AudioManagerSettings::default()).unwrap();
-    // let sound_handle = audio_manager
-    //     .load_sound(
+
+    // let sound_handle = audio_manager.load_sound(
     //         "content/background.mp3",
     //         SoundSettings::new().semantic_duration(Tempo(128.0).beats_to_seconds(8.0)),
-    //     )
-    //     .unwrap();
-    // let mut arrangement_handle = audio_manager
-    //     .add_arrangement(Arrangement::new_loop(
+    // ).unwrap();
+    // let mut arrangement_handle = audio_manager.add_arrangement(Arrangement::new_loop(
     //         &sound_handle,
     //         LoopArrangementSettings::default(),
-    //     ))
-    //     .unwrap();
-    // arrangement_handle
-    //     .play(InstanceSettings::default())
-    //     .unwrap();
+    // )).unwrap();
+    // arrangement_handle.play(InstanceSettings::default()).unwrap();
+
 
     engine.play(world)
 }

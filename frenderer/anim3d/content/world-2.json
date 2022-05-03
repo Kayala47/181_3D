@@ -1,13 +1,13 @@
 
 {"flats": [
             {"x":0.0, "z": 0.0, "is_identity": true, "door": 0}, 
-            {"x":300.0, "z": 0.0, "is_identity": true, "door": 1},
+            {"x":300.0, "z": 0.0, "is_identity": true, "door": 2},
             {"x":100.0, "z":-103.0, "is_identity": false, "door": 0},
             {"x":100.0, "z":192.0, "is_identity": false, "door": 2},
 
             {"x":600.0, "z": 0.0, "is_identity": true, "door": 0},
             {"x":400.0, "z":-103.0, "is_identity": false, "door": 0},
-            {"x":400.0, "z":192.0, "is_identity": false, "door": 1},
+            {"x":400.0, "z":192.0, "is_identity": false, "door": 2},
 
             {"x":600.0, "z":295.0, "is_identity": true, "door": 0},
             {"x":300.0, "z":295.0, "is_identity": true, "door": 2},
@@ -17,7 +17,7 @@
             {"x":100.0, "z":487.0, "is_identity": false, "door": 2},
 
             {"x":300.0, "z": 590.0, "is_identity": true, "door": 0},
-            {"x":0.0, "z": 590.0, "is_identity": true, "door": 1},
+            {"x":0.0, "z": 590.0, "is_identity": true, "door": 2},
             {"x":100.0, "z":782.0, "is_identity": false, "door": 0},
 
             {"x":-300.0, "z": 590.0, "is_identity": true, "door": 0},
