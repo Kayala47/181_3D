@@ -27,7 +27,7 @@ const WALL_WIDTH: f32 = 3.0; //x
 const WALL_HEIGHT: f32 = 1.0 * 100.0; //y
 const WALL_THICKNESS: f32 = 0.1 * 100.; //z
 
-const DOOR_WIDTH: f32 = 0.3 * 100.0;
+const DOOR_WIDTH: f32 = 0.58 * 100.0;
 const DOOR_HEIGHT: f32 = 0.7 * 100.0;
 
 const WALL_X: f32 = 0.1 * 100.0;
@@ -78,6 +78,45 @@ struct AABB2D {
     disp_mult: f32,
 }
 
+// Find collision given the player's x and z coordinates and current_room.
+pub fn handle_collision(player: &mut Player) {
+    // find current room
+    player.find_current_room();
+    let current_room = player.map.rooms_list.get(&player.current_room).unwrap();
+    let player_x = player.object.trf.translation.x;
+    let player_z = player.object.trf.translation.z;
+    let room_bottom_left_corner_x = current_room.bottom_left_corner[0];
+    let room_bottom_left_corner_z = current_room.bottom_left_corner[1];
+
+    // check for any overlaps
+    if player_x > room_bottom_left_corner_x + ROOM_WIDTH {
+        player.object.trf.translation.x = room_bottom_left_corner_x + ROOM_WIDTH - 2.;
+    }
+    if player_z > room_bottom_left_corner_z + ROOM_LENGTH {
+        player.object.trf.translation.z = room_bottom_left_corner_z + ROOM_LENGTH - 2.;
+    }
+    if player_x < room_bottom_left_corner_x {
+        player.object.trf.translation.x = room_bottom_left_corner_x + 2.;
+    }
+    if player_z < room_bottom_left_corner_z {
+        player.object.trf.translation.z = room_bottom_left_corner_z + 2.;
+    }
+    // update player's coordinates accordingly
+}
+
+// fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
+//     // let x_disp = r.half_widths.x + c.radius - (c.center.x - r.center.x).abs();
+//     // let z_disp = r.half_widths.y + c.radius - (c.center.y - r.center.y).abs();
+//     // if x_disp > 0.0 || z_disp > 0.0 {
+//     //     if x_disp < z_disp {
+//     //         Some(Vec3::new(x_disp, 0.0, 0.))
+//     //     } else {
+//     //         Some(Vec3::new(0., 0., z_disp))
+//     //     }
+//     // } else {
+//     //     println!("not displaced");
+//     //     None
+//     }
 impl fmt::Debug for AABB2D {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AABB2D").field("pos", &self.center).finish()
@@ -205,8 +244,36 @@ impl Player {
         let room_id = self
             .map
             .find_current_room(self.object.trf.translation.x, self.object.trf.translation.z);
-        println!("Current room id is {room_id}");
+        // println!("Current room id is {room_id}");
         self.change_room(room_id);
+    }
+
+    pub fn is_in_doorway(&self, world: &World) -> bool {
+        let room_id = self.current_room;
+        let room = self.map.rooms_list.get(&room_id).unwrap();
+        let player_x = self.object.trf.translation.x;
+        let player_z = self.object.trf.translation.z;
+        for flat in room.flats {
+            if self.map.walls[flat].wall.is_none() {
+                let flat_x = world.flats[flat].trf.translation.x;
+                let flat_z = world.flats[flat].trf.translation.z;
+                // println!("Room has a doorway");
+                // dbg!(flat_x);
+                // dbg!(flat_z);
+                // dbg!(player_x);
+                // dbg!(player_z);
+                if player_x >= flat_x - DOOR_WIDTH
+                    && player_x <= flat_x + DOOR_WIDTH
+                    && player_z >= flat_z - DOOR_WIDTH
+                    && player_z <= flat_z + DOOR_WIDTH
+                {
+                    // panic!("you entered a doorway");
+                    // println!("Player is in doorway!");
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
 
@@ -468,10 +535,11 @@ impl frenderer::World for World {
         let move_x = input.key_axis(Key::D, Key::A) as f32;
         let grab = input.is_key_released(Key::Space);
         let find_room = input.is_key_released(Key::F);
-
-        if find_room {
-            self.player.find_current_room();
-        }
+        self.player.find_current_room();
+        let is_in_doorway = self.player.is_in_doorway(&self);
+        // if find_room {
+        //     self.player.find_current_room();
+        // }
 
         if grab {
             self.player.grab(&mut self.textured);
@@ -490,12 +558,38 @@ impl frenderer::World for World {
             player
                 .trf
                 .prepend_translation(Vec3::new(move_x * 100.0, 0., move_z * 100.0));
+
+            if !is_in_doorway {
+            // find current room
+            let current_room = self
+                .player
+                .map
+                .rooms_list
+                .get(&self.player.current_room)
+                .unwrap();
+            let player_x = player.trf.translation.x;
+            let player_z = player.trf.translation.z;
+            let room_bottom_left_corner_x = current_room.bottom_left_corner[0];
+            let room_bottom_left_corner_z = current_room.bottom_left_corner[1];
+            // check for any overlaps
+            if player_x > room_bottom_left_corner_x + ROOM_WIDTH - 10. {
+                player.trf.translation.x = room_bottom_left_corner_x + ROOM_WIDTH - 10.;
+            }
+            if player_z > room_bottom_left_corner_z + ROOM_LENGTH - 10. {
+                player.trf.translation.z = room_bottom_left_corner_z + ROOM_LENGTH - 10.;
+            }
+            if player_x < room_bottom_left_corner_x + 10. {
+                player.trf.translation.x = room_bottom_left_corner_x + 10.;
+            }
+            if player_z < room_bottom_left_corner_z + 10. {
+                player.trf.translation.z = room_bottom_left_corner_z + 10.;
+            }
+        }
         }
         else {
             player.trf = Similarity3::new(Vec3::new(-990., 0.0, 590.) ,Rotor3::identity(), 1.0);
         }
-        
-
+    
         //use this to only check collisions w walls around the player
         // for wall_idx in self
         //     .player
@@ -505,19 +599,41 @@ impl frenderer::World for World {
         //     .unwrap()
         //     .flats
         // {
-        for (wall_idx, wall) in self.player.map.walls.iter().enumerate() {
-            if let Some(r) = &wall.wall {
-                if let Some(disp) = displacement(player_shape, &r) {
-                    // dbg!(&wall_idx, "displaced");
-                    // println!("\n\n\n\n\n\n displaced \n\n\\n\n\n");
-                    // panic!("displaced");
-                    // dbg!(&disp);
-                    let scaled_disp = disp / player.trf.scale;
-                    // dbg!(&scaled_disp);
-                    player.trf.translation += scaled_disp;
-                }
-            }
-        }
+        // for (wall_idx, wall) in self.player.map.walls.iter().enumerate() {
+        //     if let Some(r) = &wall.wall {
+        //         if let Some(disp) = displacement(player_shape, &r) {
+        //             // dbg!(&wall_idx, "displaced");
+        //             // println!("\n\n\n\n\n\n displaced \n\n\\n\n\n");
+        //             // panic!("displaced");
+        //             // dbg!(&disp);
+        //             let scaled_disp = disp / player.trf.scale;
+        //             // dbg!(&scaled_disp);
+        //             player.trf.translation += scaled_disp;
+        //         }
+        //     }
+        // }
+        // update player's coordinates accordingly
+        // for wall_idx in self
+        //     .player
+        //     .map
+        //     .rooms_list
+        //     .get(&self.player.current_room)
+        //     .unwrap()
+        //     .flats
+        // {
+        //     //use this to only check collisions w walls around the player
+        //     dbg!(&self.player.map.walls[wall_idx].wall.center);
+
+        //     if wall_idx > 0 {
+        //         continue;
+        //     }
+
+        //     if let Some(disp) = displacement(player_shape, &self.player.map.walls[wall_idx].wall) {
+        //         dbg!(&wall_idx, "displaced");
+        //         // player.trf.translation -= disp;
+        //     }
+        //     continue;
+        // }
 
         self.fp_camera
             .update(&input, player.trf.translation, player.trf.rotation);
@@ -575,6 +691,7 @@ impl frenderer::World for World {
         }
     }
 }
+
 fn main() -> Result<()> {
     frenderer::color_eyre::install()?;
 

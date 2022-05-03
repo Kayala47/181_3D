@@ -40,25 +40,25 @@
     },
     {
         "id": 2,
-        "flats": [3,7,8,9],
+        "flats": [3,10,8,11],
         "connected_rooms": [0,3,6,4],
         "bottom_left_corner": [-42.0, 151.0]
     },
     {
         "id": 3,
-        "flats": [7,9,11,12],
+        "flats": [7,9,8,6],
         "connected_rooms": [1,-1,-1,2],
         "bottom_left_corner": [258.0, 151.0]
     },
     {
         "id": 4,
-        "flats": [7,9,11,12],
+        "flats": [13,14,11,12],
         "connected_rooms": [1,-1,-1,2],
-        "bottom_left_corner": [42.0, 446.0]
+        "bottom_left_corner": [-42.0, 446.0]
     },
     {
         "id": 5,
-        "flats": [7,9,11,12],
+        "flats": [13,15,16,17],
         "connected_rooms": [1,-1,-1,2],
         "bottom_left_corner": [-342.0, 446.0]
     }
