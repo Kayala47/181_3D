@@ -13,6 +13,7 @@ use kira::{
     sound::SoundSettings,
     Tempo,
 };
+use russimp::AABB;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
@@ -22,9 +23,9 @@ const DT: f64 = 1.0 / 60.0;
 
 const GRAB_THRESHOLD: f32 = 100.0;
 
-const WALL_WIDTH: f32 = 3.0 * 100.0; //x
+const WALL_WIDTH: f32 = 3.0; //x
 const WALL_HEIGHT: f32 = 1.0 * 100.0; //y
-const WALL_THICKNESS: f32 = 0.1 * 100.0; //z
+const WALL_THICKNESS: f32 = 0.1 * 100.; //z
 
 const DOOR_WIDTH: f32 = 0.3 * 100.0;
 const DOOR_HEIGHT: f32 = 0.7 * 100.0;
@@ -42,6 +43,8 @@ const ROOM_LENGTH: f32 = 295.0;
 
 const PLAYER_HEIGHT: f32 = WALL_HEIGHT / 2.;
 
+const FIX: Vec2 = Vec2::new(45.0, 45.0);
+
 //let's call this the radius of each
 const COLLIS_THRESHHOLD: f32 = (WALL_WIDTH / 2.) + (PLAYER_HEIGHT / 2.);
 
@@ -51,13 +54,28 @@ struct Circle {
 }
 
 struct Wall {
-    wall: AABB2D,
-    door: Option<AABB2D>,
+    wall: Option<AABB2D>,
+}
+
+impl fmt::Debug for Wall {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Wall")
+            .field(
+                "wall_pos",
+                if let Some(r) = &self.wall {
+                    &r.center
+                } else {
+                    &self.wall
+                },
+            )
+            .finish()
+    }
 }
 
 struct AABB2D {
     center: Vec2,
     half_widths: Vec2,
+    disp_mult: f32,
 }
 
 // Find collision given the player's x and z coordinates and current_room.
@@ -85,20 +103,26 @@ pub fn handle_collision(player: &mut Player) {
     // update player's coordinates accordingly
 }
 
-fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
-    // let x_disp = r.half_widths.x + c.radius - (c.center.x - r.center.x).abs();
-    // let z_disp = r.half_widths.y + c.radius - (c.center.y - r.center.y).abs();
-    // if x_disp > 0.0 || z_disp > 0.0 {
-    //     if x_disp < z_disp {
-    //         Some(Vec3::new(x_disp, 0.0, 0.))
-    //     } else {
-    //         Some(Vec3::new(0., 0., z_disp))
-    //     }
-    // } else {
-    //     println!("not displaced");
-    //     None
-    // }
+// fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
+//     // let x_disp = r.half_widths.x + c.radius - (c.center.x - r.center.x).abs();
+//     // let z_disp = r.half_widths.y + c.radius - (c.center.y - r.center.y).abs();
+//     // if x_disp > 0.0 || z_disp > 0.0 {
+//     //     if x_disp < z_disp {
+//     //         Some(Vec3::new(x_disp, 0.0, 0.))
+//     //     } else {
+//     //         Some(Vec3::new(0., 0., z_disp))
+//     //     }
+//     // } else {
+//     //     println!("not displaced");
+//     //     None
+//     }
+impl fmt::Debug for AABB2D {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AABB2D").field("pos", &self.center).finish()
+    }
+}
 
+fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
     let x = c
         .center
         .x
@@ -109,6 +133,8 @@ fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
         .clamp(r.center.y - r.half_widths.y, r.center.y + r.half_widths.y);
 
     let closest_pt = Vec2::new(x, y);
+    // let mtv = (closest_pt - c.center).normalized() * (c.radius - closest_pt.mag());
+    // dbg!(&mtv);
 
     if (closest_pt - c.center).mag() <= c.radius {
         //collision!
@@ -116,45 +142,26 @@ fn displacement(c: &Circle, r: &AABB2D) -> Option<Vec3> {
         // let lt_disp = (c.center.x + c.radius) - (rect.center.x - rect.half_widths.x);
         // let rt_disp = (r.center.x + r.half_widths.x) - (c.center.x - c.radius);
 
-        let mtv = (closest_pt - c.center).normalized() * (c.radius - closest_pt.mag());
-        Some(Vec3::new(mtv.x, 0., mtv.y))
+        let x_disp = r.half_widths.x + c.radius - (c.center.x - r.center.x).abs();
+        let z_disp = r.half_widths.y + c.radius - (c.center.y - r.center.y).abs();
+
+        // let mut mult = 1.0;
+        // if c.center.x < r.center.x || c.center.y < r.center.y {
+        //     mult = -1.0;
+        // }
+
+        if x_disp < z_disp {
+            Some(Vec3::new(x_disp, 0.0, 0.) * r.disp_mult)
+        } else {
+            Some(Vec3::new(0., 0., z_disp) * r.disp_mult)
+        }
+
+        // let x = mtv.x;
+        // let y = mtv.y;
+        // Some(Vec3::new(x, 0., y))
     } else {
         None
     }
-
-    // let x_disp = r.half_widths.x + c.radius - (c.center.x - r.center.x).abs();
-    // let z_disp = r.half_widths.y + c.radius - (c.center.y - r.center.y).abs();
-    // if x_disp > 0.0 || z_disp > 0.0 {
-    //     Some(Vec3::new(x_disp, 0., z_disp))
-    // } else {
-    //     println!("not displaced");
-    //     None
-    // }
-
-    // let x = c
-    //     .center
-    //     .x
-    //     .clamp(r.center.x - r.half_widths.x, r.center.x + r.half_widths.x);
-
-    // let y = c
-    //     .center
-    //     .y
-    //     .clamp(r.center.y - r.half_widths.y, r.center.y + r.half_widths.y);
-
-    // let closest_pt = Vec2::new(x, y);
-    // let actual_distance = (closest_pt - c.center).abs();
-    // let overlap_dist = (r.center - c.center).abs();
-    // let min_dist = r.half_widths + Vec2::new(c.radius, c.radius);
-
-    // if (actual_distance - min_dist).x > 0. || (actual_distance - min_dist).y > 0. {
-    //     // let disp = distance * (r.center - c.center).normalized();
-    //     // Some(Vec3::new(0., 0., 1.))
-    //     println!("displaced");
-    //     None
-    // } else {
-    //     println!("not displaced");
-    //     None
-    // }
 }
 
 pub struct Player {
@@ -169,33 +176,47 @@ impl Player {
         //checks if keys are nearby and grabs them
 
         let curr_pos = self.object.trf.translation;
-        dbg!(curr_pos);
+
+        self.find_current_room();
+
+        if self.current_room == 5 {
+            println!("\n \n \n \n YOU WIN!!! \n \n \n \n ");
+            return;
+        }
+        // dbg!(curr_pos);
 
         //two steps: filter out the ones that match first, then actually pick them up
 
-        let keys = self.map.room_keys.get_mut(&self.current_room).unwrap();
-
         let mut tex_iter = textureds.iter();
 
-        if let Some(pos) = tex_iter.position(|t| {
+        if let Some(mut pos) = tex_iter.position(|t| {
             let textured_pos = t.trf.translation;
             distance(curr_pos, textured_pos) < GRAB_THRESHOLD
         }) {
             println!("attempting to grab something");
 
-            if pos < keys.len() && pos < textureds.len() - 1 {
+            let og_pos = pos;
+
+            for i in 0 as usize..self.current_room {
+                pos -= self.map.room_keys.get(&i).unwrap().len();
+            }
+
+            let keys = self.map.room_keys.get_mut(&self.current_room).unwrap();
+            dbg!(&keys);
+
+            if pos < keys.len() && pos < textureds.len() - 2 {
                 let key = keys.remove(pos);
                 key.pick_up(self);
 
-                textureds.remove(pos);
+                textureds.remove(og_pos);
             } else {
                 println!("not enough elements!");
             }
         }
 
-        dbg!(&self.map.room_keys.get(&self.current_room).unwrap());
-        dbg!(textureds);
-        dbg!(&self.keys_grabbed);
+        // dbg!(&self.map.room_keys.get(&self.current_room).unwrap());
+        // dbg!(textureds);
+        // dbg!(&self.keys_grabbed);
     }
 
     pub fn change_room(&mut self, new_roomid: usize) {
@@ -203,11 +224,12 @@ impl Player {
     }
 
     fn shape(&self) -> Circle {
-        dbg!(&self.object.trf.translation.x);
+        // dbg!(&self.object.trf.translation.x);
         Circle {
             center: Vec2::new(self.object.trf.translation.x, self.object.trf.translation.z)
-                * self.object.trf.scale,
-            radius: PLAYER_HEIGHT / 2.,
+                * self.object.trf.scale
+                * 10.,
+            radius: 0.01,
         }
     }
 
@@ -256,14 +278,13 @@ impl Room {
 
 pub struct RoomKey {
     starts_roomid: usize, // the room that the key is in.
-    opens_roomid: usize,  // the room they open to
+    opens_wallid: usize,  // the wall they open to
     picked_up: bool,
 }
 impl RoomKey {
     pub fn pick_up(mut self, game_state: &mut Player) {
         self.picked_up = true;
         game_state.keys_grabbed.push(self);
-        //TODO: make it disappear   en
     }
 }
 
@@ -271,7 +292,7 @@ impl fmt::Debug for RoomKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RoomKey")
             .field("starts_roomid", &self.starts_roomid)
-            .field("opens_roomid", &self.opens_roomid)
+            .field("opens_wallid", &self.opens_wallid)
             .finish()
     }
 }
@@ -294,7 +315,7 @@ fn gen_key_pair(
 
     let key = RoomKey {
         starts_roomid: starts,
-        opens_roomid: opens,
+        opens_wallid: opens,
         picked_up: false,
     };
 
@@ -353,10 +374,10 @@ impl Map {
         );
     }
 
-    pub fn add_key(&mut self, starts_roomid: usize, opens_roomid: usize) {
+    pub fn add_key(&mut self, starts_roomid: usize, opens_wallid: usize) {
         let key = RoomKey {
             starts_roomid,
-            opens_roomid,
+            opens_wallid,
             picked_up: false,
         };
 
@@ -435,6 +456,15 @@ pub struct World {
 pub struct Flat {
     trf: Similarity3,
     model: Rc<frenderer::renderer::flat::Model>,
+    open_model: Rc<frenderer::renderer::flat::Model>,
+}
+
+impl fmt::Debug for Flat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Flat")
+            .field("pos", &self.trf.translation)
+            .finish()
+    }
 }
 pub struct Textured {
     trf: Similarity3,
@@ -515,6 +545,28 @@ impl frenderer::World for World {
         if player_z < room_bottom_left_corner_z + 10. {
             player.trf.translation.z = room_bottom_left_corner_z + 10.;
         }
+        //use this to only check collisions w walls around the player
+        // for wall_idx in self
+        //     .player
+        //     .map
+        //     .rooms_list
+        //     .get(&self.player.current_room)
+        //     .unwrap()
+        //     .flats
+        // {
+        // for (wall_idx, wall) in self.player.map.walls.iter().enumerate() {
+        //     if let Some(r) = &wall.wall {
+        //         if let Some(disp) = displacement(player_shape, &r) {
+        //             // dbg!(&wall_idx, "displaced");
+        //             // println!("\n\n\n\n\n\n displaced \n\n\\n\n\n");
+        //             // panic!("displaced");
+        //             // dbg!(&disp);
+        //             let scaled_disp = disp / player.trf.scale;
+        //             // dbg!(&scaled_disp);
+        //             player.trf.translation += scaled_disp;
+        //         }
+        //     }
+        // }
         // update player's coordinates accordingly
         // for wall_idx in self
         //     .player
@@ -575,13 +627,26 @@ impl frenderer::World for World {
         let obj = &self.player.object;
         rs.render_skinned(obj.model.clone(), obj.animation, obj.state, obj.trf, 0);
         for (m_i, m) in self.flats.iter_mut().enumerate() {
-            rs.render_flat(m.model.clone(), m.trf, m_i);
+            let mut rendered = false;
+            for key in self.player.keys_grabbed.iter_mut() {
+                if key.opens_wallid.eq(&m_i) {
+                    //also change the wall vec to be none for this one
+                    self.player.map.walls[m_i].wall = None;
+                    rs.render_flat(m.open_model.clone(), m.trf, m_i);
+                    rendered = true;
+                    break;
+                }
+            }
+            if !rendered {
+                rs.render_flat(m.model.clone(), m.trf, m_i);
+            }
         }
         for (t_i, t) in self.textured.iter_mut().enumerate() {
             rs.render_textured(t.model.clone(), t.trf, t_i);
         }
     }
 }
+
 fn main() -> Result<()> {
     frenderer::color_eyre::install()?;
 
@@ -674,7 +739,7 @@ fn main() -> Result<()> {
     let mut flats_vec: Vec<Flat> = vec![];
     let mut walls_vec: Vec<Wall> = vec![];
     let flats = json.get("flats").unwrap();
-    for flat in flats.as_array().unwrap().iter() {
+    for (i, flat) in flats.as_array().unwrap().iter().enumerate() {
         let mut rot = Rotor3::identity();
 
         //1.57079 Rust was complaining about this value. now is std::f32::consts::FRAC_PI_2
@@ -689,18 +754,19 @@ fn main() -> Result<()> {
         let y = -15.0;
         let z = flat["z"].as_f64().unwrap() as f32;
 
-        let mut door_needed = true;
+        let mut wall = false;
 
         let model = {
             if flat["door"].as_i64().unwrap() as i32 == 0 {
                 // Wall model without a door
+                wall = true;
                 wall_no_door_model.clone()
             } else if flat["door"].as_i64().unwrap() as i32 == 1 {
                 // Wall model with an open door
                 wall_with_door_opened_model.clone()
             } else if flat["door"].as_i64().unwrap() as i32 == 2 {
                 // Wall model with a locked door
-                door_needed = false;
+                wall = true;
                 wall_with_door_closed_model.clone()
             } else {
                 panic!("Invalid value for specification of wall.")
@@ -708,38 +774,31 @@ fn main() -> Result<()> {
         };
 
         let trf = Similarity3::new(Vec3::new(x, y, z), rot, 100.);
-        let half_widths_wall = if !rotate {
-            Vec2::new(WALL_WIDTH / 2., WALL_THICKNESS / 2.)
+        let half_widths_wall = if rotate {
+            Vec2::new(ROOM_WIDTH / 2., WALL_THICKNESS / 2.)
         } else {
-            Vec2::new(WALL_THICKNESS / 2., WALL_WIDTH / 2.)
+            Vec2::new(WALL_THICKNESS / 2., ROOM_LENGTH / 2.)
         };
 
-        let wall_coll = AABB2D {
-            center: Vec2::new(trf.translation.x, trf.translation.z),
-            half_widths: half_widths_wall,
-        };
+        let disp_mult = if i == 0 || i == 2 { 1.0 } else { -1.0 };
 
-        let mut door_coll = None;
-        if door_needed {
-            let half_widths_door = if !rotate {
-                Vec2::new(DOOR_WIDTH / 2., WALL_THICKNESS / 2.)
-            } else {
-                Vec2::new(WALL_THICKNESS / 2., DOOR_WIDTH / 2.)
-            };
-            door_coll = Some(AABB2D {
-                center: Vec2::new(trf.translation.x, trf.translation.z),
-                half_widths: half_widths_door,
-            });
-        }
-
-        let new_wall = Wall {
-            wall: wall_coll,
-            door: door_coll,
+        let mut wall_coll = if wall {
+            Some(AABB2D {
+                center: Vec2::new(trf.translation.x, trf.translation.z) - FIX,
+                half_widths: half_widths_wall,
+                disp_mult,
+            })
+        } else {
+            None
         };
+        // dbg!(trf);
+
+        let new_wall = Wall { wall: wall_coll };
 
         let new_flat = Flat {
             trf,
             model: model.clone(),
+            open_model: wall_with_door_opened_model.clone(),
         };
         flats_vec.push(new_flat);
         walls_vec.push(new_wall);
@@ -747,7 +806,7 @@ fn main() -> Result<()> {
     map.add_walls(walls_vec);
 
     let player_obj = GameObject {
-        trf: Similarity3::new(Vec3::new(-20.0, -15.0, -10.0), Rotor3::identity(), 0.1),
+        trf: Similarity3::new(Vec3::new(150.0, -15.0, 0.0), Rotor3::identity(), 0.1),
         model,
         animation,
         state: AnimationState { t: 0.0 },
@@ -756,12 +815,18 @@ fn main() -> Result<()> {
     let key_rot = Rotor3::from_rotation_yz(std::f32::consts::FRAC_PI_2 * -1.);
     let key_positions = vec![
         Similarity3::new(Vec3::new(0.0, 0.0, -10.0), key_rot, 2.),
-        Similarity3::new(Vec3::new(10.0, 0.0, -10.0), key_rot, 2.),
-        Similarity3::new(Vec3::new(0.0, 10.0, -15.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(20.0, 0.0, -15.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(364.0, 0., 30.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(91.0, 0., 287.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(378., 0., 254.0), key_rot, 2.),
+        Similarity3::new(Vec3::new(110.0, 0., 563.0), key_rot, 2.),
     ];
 
-    let (keys, mut key_textureds) =
-        multiple_key_pairs(key_positions, key, vec![(0, 1), (0, 2), (0, 3)]);
+    let (keys, mut key_textureds) = multiple_key_pairs(
+        key_positions,
+        key,
+        vec![(0, 1), (0, 3), (1, 6), (2, 8), (3, 11), (4, 13)],
+    );
 
     map.add_mult_keys(keys);
 
@@ -813,6 +878,7 @@ fn main() -> Result<()> {
 
     // load and play background music
     let mut audio_manager = AudioManager::new(AudioManagerSettings::default()).unwrap();
+
     let sound_handle = audio_manager
         .load_sound(
             "content/background.mp3",
