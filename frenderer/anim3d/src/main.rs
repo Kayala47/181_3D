@@ -792,17 +792,23 @@ fn main() -> Result<()> {
     };
 
     // load and play background music
-    // let mut audio_manager = AudioManager::new(AudioManagerSettings::default()).unwrap();
+    let mut audio_manager = AudioManager::new(AudioManagerSettings::default()).unwrap();
 
-    // let sound_handle = audio_manager.load_sound(
-    //         "content/background.mp3",
-    //         SoundSettings::new().semantic_duration(Tempo(128.0).beats_to_seconds(8.0)),
-    // ).unwrap();
-    // let mut arrangement_handle = audio_manager.add_arrangement(Arrangement::new_loop(
-    //         &sound_handle,
-    //         LoopArrangementSettings::default(),
-    // )).unwrap();
-    // arrangement_handle.play(InstanceSettings::default()).unwrap();
+    let sound_handle = audio_manager
+        .load_sound(
+            "content/background.mp3",
+            SoundSettings::new().semantic_duration(Tempo(128.0).beats_to_seconds(8.0)),
+        )
+        .unwrap();
+    let mut arrangement_handle = audio_manager
+        .add_arrangement(Arrangement::new_loop(
+            &sound_handle,
+            LoopArrangementSettings::default(),
+        ))
+        .unwrap();
+    arrangement_handle
+        .play(InstanceSettings::default())
+        .unwrap();
 
     engine.play(world)
 }
